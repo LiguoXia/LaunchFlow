@@ -1,0 +1,51 @@
+{
+  "name": "launchflow",
+  "version": "0.4.10",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "test": "vitest run",
+    "tauri": "node scripts/tauri.mjs",
+    "desktop": "node scripts/tauri.mjs dev",
+    "desktop:build": "node scripts/tauri.mjs build",
+    "test:core": "node scripts/cargo.mjs test -p launchflow-core",
+    "test:desktop": "node scripts/desktop-smoke.mjs",
+    "test:phase2": "node scripts/desktop-smoke.mjs --phase2",
+    "check:rust": "node scripts/cargo.mjs clippy --workspace --all-targets -- -D warnings",
+    "native:build": "node scripts/build-native.mjs",
+    "test:gui": "node scripts/phase3-smoke.mjs",
+    "test:native": "node scripts/test-native.mjs --run",
+    "test:recorder": "node scripts/test-recorder.mjs",
+    "test:product": "node scripts/phase4-smoke.mjs",
+    "test:workspace-close": "node scripts/workspace-close-smoke.mjs",
+    "test:default-scene": "node scripts/default-scene-smoke.mjs",
+    "test:application-icons": "node scripts/application-icons-smoke.mjs",
+    "test:desktop-startup": "node scripts/desktop-startup-smoke.mjs",
+    "test:recording-review": "node scripts/recording-review-smoke.mjs",
+    "test:window-focus": "node scripts/test-window-focus.mjs",
+    "test:workspace-close-admin": "node scripts/test-workspace-close-elevation.mjs",
+    "release:check": "node scripts/release-preflight.mjs"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.8.0",
+    "@tauri-apps/plugin-dialog": "^2.4.0",
+    "@xyflow/react": "^12.12.0",
+    "lucide-react": "^0.468.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0",
+    "@tauri-apps/cli": "^2.8.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.4.0",
+    "prettier": "^3.9.9",
+    "typescript": "~5.8.3",
+    "vite": "^6.4.1",
+    "vitest": "^4.1.11"
+  }
+}

@@ -1,0 +1,19 @@
+[workspace]
+members = ["crates/launchflow-core", "src-tauri"]
+default-members = ["crates/launchflow-core"]
+resolver = "2"
+
+[workspace.package]
+version = "0.4.10"
+edition = "2021"
+
+[profile.release]
+lto = "thin"
+strip = true
+codegen-units = 1
+
+[profile.dev]
+debug = 1
+
+[profile.dev.package."*"]
+debug = 0

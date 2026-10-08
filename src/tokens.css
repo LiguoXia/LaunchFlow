@@ -1,0 +1,84 @@
+/* Shared product tokens; components across all phases consume the same scale. */
+:root {
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --type-caption: 12px;
+  --type-small: 13px;
+  --type-body: 14px;
+  --type-subtitle: 16px;
+  --type-heading: 20px;
+  --type-title: 24px;
+  --duration-fast: 140ms;
+  --duration-normal: 220ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --shadow: 0 4px 16px #193e2810;
+}
+:root[data-platform='windows'] {
+  font-family: 'Segoe UI', 'Microsoft YaHei', system-ui, sans-serif;
+}
+:root[data-platform='macos'] {
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif;
+}
+.main-shell {
+  background: var(--bg);
+}
+.sidebar {
+  overflow-y: auto;
+}
+.settings-section.product-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.product-section h2 {
+  font-size: var(--type-heading);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.product-section .permission-row {
+  width: 100%;
+}
+.product-section .permission-row > div {
+  flex: 1;
+  min-width: 0;
+}
+.product-section p {
+  line-height: 1.7;
+  font-size: var(--type-small);
+}
+.product-section .section-heading {
+  width: 100%;
+  margin: 0;
+}
+.product-section .section-heading > div {
+  flex: 1;
+  min-width: 0;
+}
+.button {
+  transition:
+    background var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard);
+}
+.modal {
+  border-radius: var(--radius-lg);
+  box-shadow: 0 20px 80px #12291b30;
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

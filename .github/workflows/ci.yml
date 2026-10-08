@@ -1,0 +1,45 @@
+name: Desktop checks
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+          - os: macos-15
+            target: x86_64-apple-darwin
+          - os: macos-15
+            target: aarch64-apple-darwin
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Rust stable
+        run: rustup update stable --no-self-update
+      - name: Rust components and target
+        run: |
+          rustup default stable
+          rustup component add clippy rustfmt
+          rustup target add ${{ matrix.target }}
+      - run: npm ci
+      - run: node scripts/build-native.mjs --target ${{ matrix.target }}
+      - run: npm test
+      - run: npm run build
+      - run: node scripts/cargo.mjs fmt --all -- --check
+      - run: node scripts/cargo.mjs clippy --workspace --all-targets -- -D warnings
+      - run: node scripts/cargo.mjs test -p launchflow-core
+      - name: Unelevated authorization validation
+        if: runner.os == 'Windows'
+        run: node scripts/test-preauthorization.mjs
+      - name: Native target build
+        run: node scripts/tauri.mjs build --target ${{ matrix.target }} --no-bundle
