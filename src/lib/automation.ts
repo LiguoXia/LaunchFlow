@@ -46,6 +46,7 @@ export interface NativeElement {
   window: NativeWindow;
   ancestorPath: unknown[];
   secure: boolean;
+  clickable?: boolean;
 }
 export interface NativeError {
   code: string;

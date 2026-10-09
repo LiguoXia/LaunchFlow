@@ -2,11 +2,11 @@
 
 一个 Local-First 的 Windows / macOS 桌面工作环境编排器。Tauri 2 + Rust + React + TypeScript + SQLite。
 
-当前交付 **0.4.10 · 录制回放窗口激活修复**：修复 [GUI 回放过早判定 focusDenied](docs/GUI-FOCUS-FIX.md)，补充可复制的 GUI 焦点诊断。保留 [解锁前准备桌面应用](docs/DESKTOP-STARTUP.md)、[录制审阅修复](docs/RECORDING-REVIEW-FIX.md)、[关闭工作区应用](docs/WORKSPACE-CLOSE.md)、[应用图标](docs/APPLICATION-ICONS.md)、[预授权启动](docs/PREAUTHORIZED-LAUNCH.md)、[应用诊断日志](docs/APPLICATION-DIAGNOSTICS.md) 和 [默认场景即时刷新](docs/DEFAULT-SCENE-FIX.md)。
+当前交付 **0.4.11 · 录制点击位置修复**：修复 [微信等自绘窗口录制点击只命中窗口中心](docs/RECORDED-CLICK-FIX.md)，记录真实点击位置并增加点击投递诊断。**旧录制中只保存整窗的点击需要重新录制或拾取。** 保留 [窗口激活修复](docs/GUI-FOCUS-FIX.md)、[解锁前准备桌面应用](docs/DESKTOP-STARTUP.md)、[录制审阅修复](docs/RECORDING-REVIEW-FIX.md)、[关闭工作区应用](docs/WORKSPACE-CLOSE.md)、[应用图标](docs/APPLICATION-ICONS.md)、[预授权启动](docs/PREAUTHORIZED-LAUNCH.md) 和 [应用诊断日志](docs/APPLICATION-DIAGNOSTICS.md)。
 
-Windows x64 下载：[安装包](https://github.com/LiguoXia/LaunchFlow/releases/download/v0.4.10/LaunchFlow_0.4.10_x64-setup.exe) · [便携 ZIP](https://github.com/LiguoXia/LaunchFlow/releases/download/v0.4.10/LaunchFlow_0.4.10_windows-x64-portable.zip) · [发布说明与校验文件](https://github.com/LiguoXia/LaunchFlow/releases/tag/v0.4.10)。这是未签名的预发布验收版；更新器未配置，升级请手动下载安装包。
+Windows x64 下载：[安装包](https://github.com/LiguoXia/LaunchFlow/releases/download/v0.4.11/LaunchFlow_0.4.11_x64-setup.exe) · [便携 ZIP](https://github.com/LiguoXia/LaunchFlow/releases/download/v0.4.11/LaunchFlow_0.4.11_windows-x64-portable.zip) · [发布说明与校验文件](https://github.com/LiguoXia/LaunchFlow/releases/tag/v0.4.11)。这是未签名的预发布验收版；更新器未配置，升级请手动下载安装包。
 
-本地制品位于 `artifacts/gui-focus/windows/`，该目录不提交到源码仓库。macOS 已提供 AX / ScreenCaptureKit / Vision / Keychain 原生实现，尚未在 Mac 实机编译或运行；不能视为跨平台验收已完成。当前没有标记为 V1 Release Candidate。
+本地制品位于 `artifacts/recorded-click/windows/`，该目录不提交到源码仓库。macOS 已提供 AX / ScreenCaptureKit / Vision / Keychain 原生实现，尚未在 Mac 实机编译或运行；不能视为跨平台验收已完成。当前没有标记为 V1 Release Candidate。
 
 - [V1 Release Readiness Report](docs/V1-RELEASE-READINESS.md)
 - [签名与发行流程](docs/RELEASE.md)

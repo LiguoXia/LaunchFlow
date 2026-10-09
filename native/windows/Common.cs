@@ -148,6 +148,10 @@ namespace LaunchFlow.Native
         [DllImport("user32.dll")]
         public static extern bool GetCursorPos(out POINT point);
         [DllImport("user32.dll")]
+        public static extern IntPtr WindowFromPoint(POINT point);
+        [DllImport("user32.dll")]
+        public static extern IntPtr GetAncestor(IntPtr window, uint flags);
+        [DllImport("user32.dll")]
         public static extern int GetSystemMetrics(int metric);
         [DllImport("user32.dll", SetLastError = true)]
         public static extern uint SendInput(uint count, INPUT[] inputs, int size);

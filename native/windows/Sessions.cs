@@ -153,21 +153,23 @@ static void Session(Dictionary<string, object> request)
         var actions = new List<Dictionary<string, object>>();
         var gate = new object();
         DateTime last = DateTime.MinValue;
+        DateTime lastPointer = DateTime.MinValue;
+        Dictionary<string, object> pendingClick = null;
+        Win.POINT downPoint = new Win.POINT();
         string hoverIdentity = "";
         Action<string, Dictionary<string, object>, Dictionary<string, object>> append =
             delegate(string kind, Dictionary<string, object> element, Dictionary<string, object> values)
         {
             if (paused || stopped || actions.Count >= 256)
                 return;
-            var locator = Locator(element);
-            var identity = Wire.Json.Serialize(locator);
+            var locators = Wire.Get(values, "locators") ?? new[] { Locator(element) };
             lock (gate)
             {
                 if (actions.Count > 0)
                 {
                     var previous = actions[actions.Count - 1];
-                    bool same = Wire.Json.Serialize(previous["locators"]) == Wire.Json.Serialize(new[] { locator });
-                    if (same && Wire.Str(previous, "kind") == kind && (DateTime.UtcNow - last).TotalMilliseconds < 1500)
+                    bool same = Wire.Json.Serialize(previous["locators"]) == Wire.Json.Serialize(locators);
+                    if (same && Wire.Str(previous, "kind") == kind && RecordedPointer.CanCoalesce(kind) && (DateTime.UtcNow - last).TotalMilliseconds < 1500)
                     {
                         if (kind == "inputText")
                         {
@@ -176,11 +178,11 @@ static void Session(Dictionary<string, object> request)
                             Wire.Write(Wire.Obj("event", "actions", "actions", actions.ToArray()));
                             return;
                         }
-                        if (kind == "click" || kind == "inputSecret")
+                        if (kind == "inputSecret")
                             return;
                     }
                 }
-                var action = Wire.Obj("kind", kind, "locators", new[] { locator });
+                var action = Wire.Obj("kind", kind, "locators", locators);
                 foreach (var pair in values)
                     action[pair.Key] = pair.Value;
                 actions.Add(action);
@@ -200,6 +202,7 @@ static void Session(Dictionary<string, object> request)
         Action<bool> setPaused = delegate(bool value)
         {
             paused = value;
+            pendingClick = null;
             last = DateTime.MinValue;
             pauseButton.Text = value ? "Resume Recording" : "Pause Recording";
             Wire.Write(Wire.Obj("event", "state", "state", value ? "paused" : "recording"));
@@ -259,33 +262,53 @@ static void Session(Dictionary<string, object> request)
         if (code >= 0 && !paused && !stopped)
         {
             int msg = message.ToInt32();
+            var inputPoint = ((Win.MouseHook)Marshal.PtrToStructure(data, typeof(Win.MouseHook))).Point;
             if (picking && (msg == 0x201 || msg == 0x202))
             {
                 if (msg == 0x201 && hovered != null)
                 {
-                    selected = true;
-                    Wire.Write(Wire.Obj("event", "selected", "element", hovered, "locator", Locator(hovered)));
+                    try
+                    {
+                        var pickedLocator = RecordedPointer.NeedsPoint(hovered)
+                            ? RecordedPointer.Locator(Wire.Map(hovered["window"]), inputPoint.X, inputPoint.Y)
+                            : Locator(hovered);
+                        selected = true;
+                        Wire.Write(Wire.Obj("event", "selected", "element", hovered, "locator", pickedLocator));
+                    }
+                    catch { selected = false; }
                 }
                 if (msg == 0x202 && selected)
                     host.BeginInvoke(stop);
                 return new IntPtr(1);
             }
-            if (!picking && msg == 0x202)
+            if (!picking && msg == 0x201)
             {
                 try
                 {
-                    var info = (Win.MouseHook)Marshal.PtrToStructure(data, typeof(Win.MouseHook));
+                    pendingClick = null;
+                    if (Win.GetAncestor(Win.WindowFromPoint(inputPoint), 2) == target)
+                    {
+                        downPoint = inputPoint;
+                        pendingClick = RecordedPointer.Locator(Desktop.WindowInfo(target), inputPoint.X, inputPoint.Y);
+                        lock (gate) { lastPointer = DateTime.UtcNow; }
+                    }
+                }
+                catch { pendingClick = null; }
+            }
+            if (!picking && msg == 0x202 && pendingClick != null)
+            {
+                try
+                {
+                    var locator = pendingClick;
+                    pendingClick = null;
+                    lock (gate) { lastPointer = DateTime.UtcNow; }
+                    // The mouse-down may already have opened a dialog or changed the page.
+                    // Do not retarget (or discard) that click based on the new UI at mouse-up.
+                    if (Math.Abs(inputPoint.X - downPoint.X) > SystemInformation.DragSize.Width ||
+                        Math.Abs(inputPoint.Y - downPoint.Y) > SystemInformation.DragSize.Height)
+                        return Win.CallNextHookEx(IntPtr.Zero, code, message, data);
                     host.BeginInvoke((Action)delegate {
-                        try
-                        {
-                            var e = SemanticElement(
-                                AutomationElement.FromPoint(new System.Windows.Point(info.Point.X, info.Point.Y)));
-                            if (Desktop.ElementWindow(e) == target)
-                                append("click", Desktop.Info(e, target), Wire.Obj());
-                        }
-                        catch
-                        {
-                        }
+                        append("click", null, Wire.Obj("locators", new[] { locator }));
                     });
                 }
                 catch
@@ -439,6 +462,9 @@ static void Session(Dictionary<string, object> request)
             {
                 try
                 {
+                    // One physical click can also raise UIA Invoked; retain the physical
+                    // event only. UIA-only invocations remain supported for semantic tools.
+                    lock (gate) { if ((DateTime.UtcNow - lastPointer).TotalMilliseconds < 1000) return; }
                     var e = sender as AutomationElement;
                     if (e != null && Desktop.ElementWindow(e) == target)
                         append("click", Desktop.Info(e, target), Wire.Obj());

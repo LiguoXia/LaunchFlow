@@ -8,6 +8,7 @@ using LaunchFlow.Native;
 class ForegroundFixture
 {
     [DllImport("user32.dll")] static extern IntPtr WindowFromPoint(Win.POINT point);
+    [DllImport("user32.dll")] static extern IntPtr SendMessageTimeout(IntPtr h, uint msg, UIntPtr w, IntPtr l, uint flags, uint timeout, out UIntPtr result);
     [STAThread] static int Main(string[] args)
     {
         Win.SetProcessDpiAwarenessContext(new IntPtr(-4));
@@ -33,8 +34,20 @@ class ForegroundFixture
         var timer = new Timer { Interval = 150 };
         timer.Tick += delegate {
             if (!Win.IsWindowVisible(form.Handle)) Win.ShowWindow(form.Handle, 5);
-            if (clicked && Win.GetForegroundWindow() == target) { success = true; form.Close(); return; }
             if (watch.ElapsedMilliseconds > 5000) { form.Close(); return; }
+            if (clicked && Win.GetForegroundWindow() == target) {
+                // Give the isolated test app a real last-input event, as a user
+                // clicking its title bar would. Never click product controls.
+                if (args.Length > 2 && args[2] == "--caption") {
+                    Win.RECT r; Win.GetWindowRect(target, out r);
+                    var p = new Win.POINT { X = r.Left + 100, Y = r.Top + 18 };
+                    UIntPtr hit;
+                    if (WindowFromPoint(p) != target || SendMessageTimeout(target, 0x84, UIntPtr.Zero,
+                        new IntPtr((p.Y << 16) | (p.X & 0xffff)), 2, 200, out hit) == IntPtr.Zero || hit.ToUInt64() != 2) return;
+                    Win.Send(new System.Collections.Generic.List<Win.INPUT> { Win.Mouse(p.X, p.Y, 2), Win.Mouse(p.X, p.Y, 4) });
+                }
+                success = true; form.Close(); return;
+            }
             if (!clicked) {
                 Win.RECT r;
                 Win.GetWindowRect(button.Handle, out r);

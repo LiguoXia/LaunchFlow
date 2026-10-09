@@ -9,6 +9,46 @@ use std::{
 };
 
 #[test]
+fn pointer_route_and_legacy_error_export_without_coordinates_or_control_content() {
+    use launchflow_core::model::{Node, Run, Scene};
+    let dir = tempfile::tempdir().unwrap();
+    let mut scene = Scene::new("PRIVATE_CLICK_CONTENT");
+    scene
+        .workflow
+        .nodes
+        .push(Node::new("gui.click", "PRIVATE_CLICK_CONTENT", json!({})));
+    let mut run = Run::new(scene, "manual");
+    run.node_runs[0].output = json!({"automation": {
+        "pointer":{"route":"sendInput","targetRole":"Coordinate","positionSource":"explicitPoint","stage":"inputDispatched","inputEventsSent":2,"hitTestMatched":true,"x":1234,"y":4321,"name":"PRIVATE_CLICK_CONTENT"}
+    }});
+    let text = application_log::report("0.4.11", dir.path(), Some(&run)).unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(&text).unwrap();
+    assert_eq!(parsed["run"]["nodes"][0]["kind"], "gui.click");
+    let pointer = &parsed["run"]["nodes"][0]["automation"]["pointer"];
+    assert_eq!(pointer["route"], "sendInput");
+    assert_eq!(pointer["inputEventsSent"], 2);
+    assert!(pointer.get("x").is_none());
+    assert!(!text.contains("PRIVATE_CLICK_CONTENT"));
+    run.node_runs[0].output["automation"]["error"] = json!({"code":"impreciseClickTarget","message":"PRIVATE_CLICK_CONTENT","details":{"pointer":{"route":"sendInput","targetRole":"Window","positionSource":"elementBounds","stage":"targetValidation","inputEventsSent":0}}});
+    let text = application_log::report("0.4.11", dir.path(), Some(&run)).unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(&text).unwrap();
+    assert_eq!(
+        parsed["run"]["nodes"][0]["automation"]["errorCode"],
+        "impreciseClickTarget"
+    );
+    assert_eq!(
+        parsed["run"]["nodes"][0]["automation"]["pointer"]["targetRole"],
+        "Window"
+    );
+    run.node_runs[0].output["automation"]["error"]["details"]["pointer"]["route"] =
+        json!("PRIVATE_CLICK_CONTENT");
+    run.node_runs[0].output["automation"]["error"]["details"]["pointer"]["targetRole"] =
+        json!("PRIVATE_CLICK_CONTENT");
+    let text = application_log::report("0.4.11", dir.path(), Some(&run)).unwrap();
+    assert!(!text.contains("PRIVATE_CLICK_CONTENT"));
+}
+
+#[test]
 fn gui_focus_diagnostics_survive_copy_and_bundle_without_private_fields() {
     use launchflow_core::model::{Node, Run, Scene};
     let dir = tempfile::tempdir().unwrap();

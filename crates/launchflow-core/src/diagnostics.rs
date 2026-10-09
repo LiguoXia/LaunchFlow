@@ -50,6 +50,9 @@ pub(crate) fn automation(output: &Value) -> Value {
             "secureTargetRequired",
             "secureInputRequired",
             "windowOperationFailed",
+            "impreciseClickTarget",
+            "invalidCoordinates",
+            "targetObscured",
         ];
         v.as_str()
             .map(|s| json!(if allowed.contains(&s) { s } else { "unknown" }))
@@ -88,11 +91,65 @@ pub(crate) fn automation(output: &Value) -> Value {
     if let Some(ms) = f["elapsedMs"].as_u64() {
         focus.insert("elapsedMs".into(), json!(ms));
     }
+    let p = a["error"]["details"]
+        .get("pointer")
+        .filter(|v| v.is_object())
+        .unwrap_or(&a["pointer"]);
+    let mut pointer = serde_json::Map::new();
+    for (key, allowed) in [
+        (
+            "route",
+            vec!["sendInput", "invoke", "toggle", "selectionItem"],
+        ),
+        (
+            "targetRole",
+            vec![
+                "Window",
+                "Pane",
+                "Custom",
+                "Group",
+                "Coordinate",
+                "Button",
+                "Edit",
+                "Text",
+                "ListItem",
+                "MenuItem",
+                "CheckBox",
+                "RadioButton",
+                "TabItem",
+                "Document",
+                "Image",
+            ],
+        ),
+        (
+            "positionSource",
+            vec!["explicitPoint", "elementBounds", "semantic"],
+        ),
+        (
+            "stage",
+            vec![
+                "targetValidation",
+                "pointerMoved",
+                "inputDispatched",
+                "invoked",
+            ],
+        ),
+    ] {
+        if let Some(value) = p[key].as_str().filter(|v| allowed.contains(v)) {
+            pointer.insert(key.into(), json!(value));
+        }
+    }
+    if let Some(value) = p["hitTestMatched"].as_bool() {
+        pointer.insert("hitTestMatched".into(), json!(value));
+    }
+    if let Some(value) = p["inputEventsSent"].as_u64().filter(|v| *v <= 4) {
+        pointer.insert("inputEventsSent".into(), json!(value));
+    }
     let attempts: Vec<_> = a["locatorAttempts"].as_array().into_iter().flatten().take(32).map(|attempt| {
         let kind = attempt["kind"].as_str().filter(|s| ["accessibility", "window", "image", "ocr", "relativeCoordinate"].contains(s)).unwrap_or("unknown");
         json!({"kind":kind,"success":attempt["success"].as_bool(),"durationMs":attempt["durationMs"].as_u64(),"errorCode":code(&attempt["error"]["code"])})
     }).collect();
-    json!({"errorCode":code(&a["error"]["code"]),"durationMs":a["durationMs"].as_u64(),"focus":focus,"locatorAttempts":attempts})
+    json!({"errorCode":code(&a["error"]["code"]),"durationMs":a["durationMs"].as_u64(),"focus":focus,"pointer":pointer,"locatorAttempts":attempts})
 }
 pub fn bundle(version: &str, schema: u32, permissions: &Value, runs: &[Run]) -> Result<Vec<u8>> {
     bundle_with_application_log(version, schema, permissions, runs, &json!([]))

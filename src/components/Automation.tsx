@@ -500,6 +500,15 @@ export function ActionTools({ scene, node }: { scene: Scene; node: WorkflowNode 
   const running = result && ['running', 'queued', 'paused'].includes(result.status);
   return (
     <div className="action-tools">
+      {['gui.click', 'gui.doubleClick', 'gui.rightClick'].includes(node.type) &&
+        !!(node.config.locators as Locator[] | undefined)?.length &&
+        (node.config.locators as Locator[] | undefined)?.every(
+          (l) => l.kind === 'window' || (l.kind === 'accessibility' && l.role === 'Window'),
+        ) && (
+          <p className="danger-text" role="alert">
+            此点击只定位到整个窗口，缺少具体位置。请重新录制该点击，或用 Pick Element 重新拾取。
+          </p>
+        )}
       {!!scene.parameters?.length && (
         <details>
           <summary>Test Action 参数</summary>

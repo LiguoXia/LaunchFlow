@@ -289,6 +289,8 @@ impl NodeRunner for GuiRunner {
                         let performed = provider.request(json!({"op":"perform","window":target.window,"locator":target.native_locator,"point":target.point.map(|(x,y)|json!({"x":x,"y":y})),"action":action})).await.map_err(failure)?;
                         ctx.diagnostics.lock().unwrap().focus =
                             performed.get("focus").filter(|v| !v.is_null()).cloned();
+                        ctx.diagnostics.lock().unwrap().pointer =
+                            performed.get("pointer").filter(|v| !v.is_null()).cloned();
                     }
                     let mut d = ctx.diagnostics.lock().unwrap();
                     d.duration_ms = started.elapsed().as_millis() as u64;

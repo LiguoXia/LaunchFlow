@@ -312,7 +312,7 @@ export default function App() {
           </button>
           <div className="sidebar-footer">
             <span>LOCAL FIRST</span>
-            <span>v{data?.version || '0.4.10'}</span>
+            <span>v{data?.version || '0.4.11'}</span>
           </div>
         </div>
       </aside>

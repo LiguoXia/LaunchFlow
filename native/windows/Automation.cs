@@ -106,6 +106,7 @@ namespace LaunchFlow.Native
                 Win.Rect(b.IsEmpty ? 0 : b.X, b.IsEmpty ? 0 : b.Y, b.IsEmpty ? 0 : b.Width, b.IsEmpty ? 0 : b.Height);
             d["enabled"] = e.Current.IsEnabled;
             d["offscreen"] = e.Current.IsOffscreen;
+            d["clickable"] = Pattern(e, InvokePattern.Pattern) != null || Pattern(e, TogglePattern.Pattern) != null || Pattern(e, SelectionItemPattern.Pattern) != null;
             d["window"] = WindowInfo(window);
             d["runtimeId"] = e.GetRuntimeId();
             var path = new List<object>();
@@ -236,6 +237,16 @@ namespace LaunchFlow.Native
                                    Dictionary<string, object> point)
         {
             string kind = Wire.Str(action, "kind");
+            bool pointerClick = kind == "click" || kind == "doubleClick" || kind == "rightClick";
+            if (pointerClick)
+            {
+                PointerInput.Start("sendInput", e == null ? "Coordinate" : Role(e), e == null ? "explicitPoint" : "elementBounds");
+                if (e != null && e.Current.ControlType == ControlType.Window)
+                    throw PointerInput.Failure("impreciseClickTarget",
+                        "旧点击只定位到了整个窗口，没有保存实际点击位置。请重新录制此点击，或用 Pick Element 重新拾取点击位置。");
+                if (e == null && (Wire.Get(point, "x") == null || Wire.Get(point, "y") == null))
+                    throw PointerInput.Failure("impreciseClickTarget", "点击缺少具体位置。请重新录制或拾取目标。");
+            }
             if (kind == "activateWindow")
             {
                 Activate(window);
@@ -353,18 +364,24 @@ namespace LaunchFlow.Native
                     if (invoke != null)
                     {
                         invoke.Invoke();
+                        PointerInput.Start("invoke", Role(e), "semantic");
+                        PointerInput.Diagnostic["stage"] = "invoked";
                         return;
                     }
                     var toggle = Pattern(e, TogglePattern.Pattern) as TogglePattern;
                     if (toggle != null)
                     {
                         toggle.Toggle();
+                        PointerInput.Start("toggle", Role(e), "semantic");
+                        PointerInput.Diagnostic["stage"] = "invoked";
                         return;
                     }
                     var selection = Pattern(e, SelectionItemPattern.Pattern) as SelectionItemPattern;
                     if (selection != null)
                     {
                         selection.Select();
+                        PointerInput.Start("selectionItem", Role(e), "semantic");
+                        PointerInput.Diagnostic["stage"] = "invoked";
                         return;
                     }
                     if (kind == "invoke")
@@ -433,12 +450,8 @@ namespace LaunchFlow.Native
             }
             else if (kind == "click" || kind == "doubleClick" || kind == "rightClick")
             {
-                int count = kind == "doubleClick" ? 2 : 1;
-                for (int i = 0; i < count; i++)
-                {
-                    input.Add(Win.Mouse(px, py, kind == "rightClick" ? 8u : 2u));
-                    input.Add(Win.Mouse(px, py, kind == "rightClick" ? 16u : 4u));
-                }
+                PointerInput.Click(window, px, py, kind);
+                return;
             }
             else
                 throw new NativeFailure("unsupported", "Unknown GUI action.");
@@ -560,9 +573,10 @@ namespace LaunchFlow.Native
             if (op == "perform")
             {
                 WindowFocus.LastDiagnostic = null;
+                PointerInput.Diagnostic = null;
                 var before = target == null ? null : Info(target, window);
                 Perform(window, target, Wire.Map(Wire.Get(request, "action")), Wire.Map(Wire.Get(request, "point")));
-                return Wire.Obj("element", before, "window", WindowInfo(window), "focus", WindowFocus.LastDiagnostic);
+                return Wire.Obj("element", before, "window", WindowInfo(window), "focus", WindowFocus.LastDiagnostic, "pointer", PointerInput.Diagnostic);
             }
             if (op == "highlight")
             {
@@ -610,7 +624,9 @@ namespace LaunchFlow.Native
             }
             catch (NativeFailure e)
             {
-                Wire.Error(e.Code, e.Message, null, e.Details);
+                var details = new Dictionary<string, object>(Wire.Map(e.Details));
+                if (PointerInput.Diagnostic != null) details["pointer"] = PointerInput.Diagnostic;
+                Wire.Error(e.Code, e.Message, null, details.Count == 0 ? null : details);
             }
             catch (ElementNotAvailableException)
             {

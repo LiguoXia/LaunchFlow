@@ -202,6 +202,8 @@ pub struct Diagnostic {
     pub error: Option<AutomationError>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub focus: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pointer: Option<Value>,
 }
 #[derive(Debug, Clone)]
 pub struct ResolvedTarget {

@@ -266,8 +266,13 @@ pub fn read(data: &Path) -> Result<Value> {
     Ok(sanitize_entries(&serde_json::to_value(&entries[first..])?))
 }
 pub fn report(version: &str, data: &Path, run: Option<&Run>) -> Result<String> {
+    let kinds: std::collections::BTreeSet<_> = crate::registry::NodeRegistry::builtins()
+        .definitions()
+        .into_iter()
+        .map(|d| d.node_type)
+        .collect();
     let context = run.map(|r| json!({"run":digest(r.id.as_bytes()),"status":r.status,"startedAt":crate::diagnostics::timestamp(&r.started_at),"endedAt":r.ended_at.as_deref().and_then(crate::diagnostics::timestamp),"durationMs":r.duration_ms,
-        "nodes":r.node_runs.iter().map(|n| json!({"node":digest(n.node_id.as_bytes()),"status":n.status,"retryCount":n.retry_count,"durationMs":n.duration_ms,"errorCategory":n.error.as_deref().map(crate::diagnostics::category),"automation":crate::diagnostics::automation(&n.output)})).collect::<Vec<_>>()}));
+        "nodes":r.node_runs.iter().map(|n| json!({"node":digest(n.node_id.as_bytes()),"kind":r.scene_snapshot.workflow.nodes.iter().find(|node|node.id==n.node_id).map(|node|node.node_type.as_str()).filter(|kind|kinds.contains(*kind)).unwrap_or("unknown"),"status":n.status,"retryCount":n.retry_count,"durationMs":n.duration_ms,"errorCategory":n.error.as_deref().map(crate::diagnostics::category),"automation":crate::diagnostics::automation(&n.output)})).collect::<Vec<_>>()}));
     Ok(serde_json::to_string_pretty(
         &json!({"format":"LaunchFlow application diagnostics v1","appVersion":version,"os":std::env::consts::OS,"architecture":std::env::consts::ARCH,"exportedAt":crate::model::now(),"privacy":"No names, paths, arguments, credentials, input, screenshots or raw process output. Application/profile IDs are SHA-256 digests.","run":context,"events":read(data)?}),
     )?)
