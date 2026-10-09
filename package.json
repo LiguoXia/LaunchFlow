@@ -1,6 +1,6 @@
 {
   "name": "launchflow",
-  "version": "0.4.11",
+  "version": "0.4.12",
   "private": true,
   "type": "module",
   "scripts": {
@@ -27,6 +27,7 @@
     "test:recording-review": "node scripts/recording-review-smoke.mjs",
     "test:window-focus": "node scripts/test-window-focus.mjs",
     "test:recorded-click": "node scripts/recorded-click-smoke.mjs",
+    "test:recorded-text": "node scripts/recorded-text-smoke.mjs",
     "test:workspace-close-admin": "node scripts/test-workspace-close-elevation.mjs",
     "release:check": "node scripts/release-preflight.mjs"
   },

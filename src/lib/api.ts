@@ -15,6 +15,7 @@ export const desktopAvailable = isTauri();
 export interface StartupStatus {
   registrationId: string;
   legacyEnabled: boolean;
+  login?: { registered: boolean; matches: boolean };
   task: {
     registered?: boolean;
     enabled?: boolean;
@@ -29,11 +30,21 @@ export interface StartupStatus {
     mdmAllow?: number | null;
     domainJoined?: boolean | null;
     entraJoined?: boolean | null;
+    autoLogonConfigured?: boolean | null;
   };
   observation: {
     started?: { at: string; desktopReady: boolean };
     dispatch?: { at: string; desktopReady: boolean };
+    result?: { at: string; status: string; code: string; message: string };
   } | null;
+  readiness: {
+    ready: boolean;
+    code: string;
+    message: string;
+    sceneId?: string;
+    version?: number;
+    canAuthorize: boolean;
+  };
   desktopReady: boolean;
 }
 export interface ApplicationAuthorization {
@@ -46,6 +57,9 @@ export const api = {
   setStartupMode: (mode: 'login' | 'beforeUnlock' | 'disabled') =>
     invoke<void>('set_startup_mode', { mode }),
   openSigninSettings: () => invoke<void>('open_signin_settings'),
+  openAutologonSettings: () => invoke<void>('open_autologon_settings'),
+  authorizeDefaultStartup: (sceneId: string, version: number) =>
+    invoke<void>('authorize_default_startup', { sceneId, version }),
   onCloseWorkspace: (fn: () => void) => listen('launchflow://closeWorkspace', fn),
   bootstrap: () => invoke<Bootstrap>('bootstrap'),
   diagnosticLog: (runId?: string) => invoke<string>('diagnostic_log', { runId: runId ?? null }),

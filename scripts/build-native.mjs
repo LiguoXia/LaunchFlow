@@ -56,6 +56,7 @@ if (process.platform === 'win32') {
     'Automation.cs',
     'WindowFocus.cs',
     'RecordedPointer.cs',
+    'RecordedText.cs',
     'PointerInput.cs',
     'Sessions.cs',
     'Ocr.cs',

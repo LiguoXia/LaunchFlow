@@ -288,6 +288,28 @@ impl Engine {
         run.profiles_snapshot = self.store.profiles()?;
         self.enqueue(run, None)
     }
+    pub fn check_startup(&self, scene: &Scene, values: &Values) -> Result<()> {
+        let snapshots = self.snapshots(scene, true)?;
+        crate::policy::check(
+            std::iter::once(scene).chain(snapshots.values()),
+            "startup",
+            false,
+        )?;
+        parameters::bind(&scene.parameters, values)?;
+        Ok(())
+    }
+    pub fn record_startup_rejection(&self, scene: Scene, message: &str) -> Result<Run> {
+        let mut run = Run::new(scene, "startup");
+        run.status = RunStatus::Failed;
+        run.ended_at = Some(now());
+        run.error = Some(message.into());
+        for node in &mut run.node_runs {
+            node.status = NodeStatus::Skipped;
+            node.message = "启动检查未通过，步骤未执行".into();
+        }
+        self.publish(&mut run, "RunFailed")?;
+        Ok(run)
+    }
     fn enqueue(self: &Arc<Self>, mut run: Run, parent: Option<Control>) -> Result<Run> {
         let mut active = self
             .active

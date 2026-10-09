@@ -326,6 +326,8 @@ namespace LaunchFlow.Native
             {
                 if (e == null)
                     throw new NativeFailure("unsupported", "Text input requires an accessible target.");
+                if (!RecordedText.IsInput(e))
+                    throw new NativeFailure("impreciseTextTarget", "文字输入需要定位到输入框。请用 Pick Element 重新拾取输入框，不能使用整个窗口。");
                 bool secure = e.Current.IsPassword;
                 if (kind == "inputSecret" && !secure)
                     throw new NativeFailure("secureTargetRequired", "Input Secret requires a secure accessible field.");
@@ -334,14 +336,26 @@ namespace LaunchFlow.Native
                 string value = Wire.Str(action, "text");
                 if (value.Length > 32768)
                     throw new NativeFailure("invalidAction", "Input text is too long.");
+                Activate(window);
+                try { e.SetFocus(); }
+                catch (InvalidOperationException) { }
+                if (!RecordedText.HasFocus(e)) {
+                    var bounds = e.Current.BoundingRectangle;
+                    if (bounds.IsEmpty) throw new NativeFailure("notVisible", "The input field has no visible bounds.");
+                    PointerInput.Start("sendInput", Role(e), "elementBounds");
+                    PointerInput.Click(window, bounds.X + bounds.Width / 2, bounds.Y + bounds.Height / 2, "click");
+                    if (!RecordedText.HasFocus(e)) throw new NativeFailure("focusDenied", "输入框未获得键盘焦点，未发送文字。请重新拾取实际输入框。");
+                }
+                WindowFocus.BeforeInput(window);
                 var pattern = Pattern(e, ValuePattern.Pattern) as ValuePattern;
                 if (pattern != null && !pattern.Current.IsReadOnly)
                 {
-                    pattern.SetValue(value);
-                    return;
+                    try {
+                        pattern.SetValue(value);
+                        if (secure || RecordedText.WaitForText(e, value)) return;
+                    } catch (InvalidOperationException) { }
+                    catch (NotSupportedException) { }
                 }
-                Activate(window);
-                e.SetFocus();
                 var keys = new List<Win.INPUT>();
                 keys.Add(Win.Key(17, false));
                 keys.Add(Win.Key(65, false));
@@ -354,6 +368,8 @@ namespace LaunchFlow.Native
                 }
                 WindowFocus.BeforeInput(window);
                 Win.Send(keys);
+                if (!secure && !RecordedText.WaitForText(e, value))
+                    throw new NativeFailure("textNotApplied", "输入后未能从目标输入框确认文字已生效。请检查输入框定位与权限，避免重复执行发送步骤。");
                 return;
             }
             if (kind == "click" || kind == "invoke")
@@ -527,6 +543,7 @@ namespace LaunchFlow.Native
             if (op == "desktopStartup") return DesktopStartup.Task(request);
             if (op == "desktopStartupConditions") return DesktopStartup.Conditions();
             if (op == "openSigninSettings") return DesktopStartup.OpenSettings();
+            if (op == "openAutologonSettings") return DesktopStartup.OpenAutologon();
             if (op == "applicationIcons") return ApplicationIcons.ReadBatch(request);
             if (op == "vault") return Vault.Dispatch(request);
             if (op == "displays") return WorkspaceDesktop.Displays();

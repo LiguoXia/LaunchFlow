@@ -78,6 +78,7 @@ export interface Session {
   locator: Locator | null;
   actions: Record<string, unknown>[];
   reviewed?: boolean;
+  warnings?: string[];
   error?: NativeError;
 }
 export const errorText = (e: unknown) =>

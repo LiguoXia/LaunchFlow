@@ -53,6 +53,8 @@ pub(crate) fn automation(output: &Value) -> Value {
             "impreciseClickTarget",
             "invalidCoordinates",
             "targetObscured",
+            "impreciseTextTarget",
+            "textNotApplied",
         ];
         v.as_str()
             .map(|s| json!(if allowed.contains(&s) { s } else { "unknown" }))

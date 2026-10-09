@@ -397,23 +397,77 @@ impl TriggerEngine {
         result
     }
     pub fn lifecycle(&self, kind: &str) -> Result<()> {
+        if kind == "systemLogin" {
+            self.startup()?;
+            return Ok(());
+        }
         self.registry.provider(kind)?;
         let scenes = self.engine.store.scenes()?;
         for scene in scenes {
-            if kind == "systemLogin" && !scene.is_default {
-                continue;
-            }
             let matching: Vec<_> = scene.triggers.iter().filter(|t| t.kind == kind).collect();
-            if kind == "systemLogin" && matching.is_empty() {
-                if let Err(e) = self.manual(&scene.id, Values::new(), "startup") {
-                    self.report(&scene.id, "defaultStartup", "error", &e.to_string());
-                }
-            }
             for t in matching.into_iter().filter(|t| t.enabled) {
                 let _ = self.fire(&scene.id, &t.id);
             }
         }
         Ok(())
+    }
+    pub fn startup_scene(&self) -> Result<Option<(Scene, Values)>> {
+        let Some(scene) = self
+            .engine
+            .store
+            .scenes()?
+            .into_iter()
+            .find(|s| s.is_default)
+        else {
+            return Ok(None);
+        };
+        let login: Vec<_> = scene
+            .triggers
+            .iter()
+            .filter(|t| t.kind == "systemLogin")
+            .collect();
+        if !login.is_empty() && login.iter().all(|t| !t.enabled) {
+            return Err(Error::Validation(
+                "startupTriggerDisabled: 默认场景的登录触发器已禁用，请在场景设置中启用。".into(),
+            ));
+        }
+        let values = login
+            .into_iter()
+            .find(|t| t.enabled)
+            .map(|t| t.parameters.clone())
+            .unwrap_or_default();
+        Ok(Some((scene, values)))
+    }
+    pub fn startup(&self) -> Result<Option<Run>> {
+        let planned = self.startup_scene();
+        let result = match planned {
+            Ok(Some((scene, values))) => self.manual(&scene.id, values, "startup").map(Some),
+            Ok(None) => return Ok(None),
+            Err(error) => Err(error),
+        };
+        match &result {
+            Ok(Some(run)) => self.report(
+                &run.scene_id,
+                "defaultStartup",
+                "fired",
+                &format!("Run {}", run.id),
+            ),
+            Err(error) => {
+                if let Some(scene) = self
+                    .engine
+                    .store
+                    .scenes()?
+                    .into_iter()
+                    .find(|s| s.is_default)
+                {
+                    self.report(&scene.id, "defaultStartup", "error", &error.to_string());
+                    self.engine
+                        .record_startup_rejection(scene, &error.to_string())?;
+                }
+            }
+            _ => {}
+        }
+        result
     }
     pub async fn poll_at(&self, clock: DateTime<Local>) -> Result<()> {
         let scenes = self

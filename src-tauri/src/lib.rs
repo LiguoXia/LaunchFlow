@@ -40,6 +40,7 @@ struct AppState {
     sessions: Arc<SessionManager>,
     engine: Arc<Engine>,
     startup_cancel: CancellationToken,
+    startup_requested: std::sync::atomic::AtomicBool,
     service_cancel: CancellationToken,
     triggers: Arc<TriggerEngine>,
     hotkey_sync: Arc<Mutex<()>>,
@@ -519,7 +520,9 @@ pub fn run() {
     };
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, args, _| {
-            if !args.iter().any(|a| a == "--startup") {
+            if args.iter().any(|a| a == "--startup") {
+                startup::request(app);
+            } else {
                 show_main(app);
             }
         }))
@@ -555,6 +558,8 @@ pub fn run() {
             startup_status,
             set_startup_mode,
             open_signin_settings,
+            open_autologon_settings,
+            authorize_default_startup,
             application_icons,
             workspace_close_capture,
             workspace_close_select,
@@ -671,6 +676,7 @@ pub fn run() {
                 sessions,
                 engine: engine.clone(),
                 startup_cancel: startup_cancel.clone(),
+                startup_requested: std::sync::atomic::AtomicBool::new(false),
                 service_cancel: service_cancel.clone(),
                 triggers: triggers.clone(),
                 hotkey_sync: Arc::new(Mutex::new(())),
@@ -795,21 +801,7 @@ pub fn run() {
                 }
             });
             if std::env::args().any(|a| a == "--startup") {
-                startup::record(&app.state::<AppState>(), "started");
-                let app = app.handle().clone();
-                tauri::async_runtime::spawn(async move {
-                    let delay = engine
-                        .store
-                        .settings()
-                        .map(|s| s.startup_delay_seconds)
-                        .unwrap_or(5);
-                    tokio::select! {
-                        _ = startup_cancel.cancelled() => return,
-                        _ = tokio::time::sleep(Duration::from_secs(delay)) => {}
-                    }
-                    startup::record(&app.state::<AppState>(), "dispatch");
-                    let _ = app.state::<AppState>().triggers.lifecycle("systemLogin");
-                });
+                startup::request(app.handle());
             } else {
                 show_main(app.handle());
             }

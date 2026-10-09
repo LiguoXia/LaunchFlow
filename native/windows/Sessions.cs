@@ -119,10 +119,16 @@ public static Dictionary<string, object> Locator(Dictionary<string, object> elem
     var window =
         Wire.Obj("application", Wire.Str(source, "application"), "title", Wire.Str(source, "title"), "className",
                  Wire.Str(source, "className").StartsWith("HwndWrapper[") ? "" : Wire.Str(source, "className"));
+    bool input = Wire.Str(element, "role") == "Edit" || Wire.Str(element, "role") == "Document" || Wire.Bool(element, "secure");
+    var ancestors = Wire.List(Wire.Get(element, "ancestorPath")).Select(delegate(object ancestor) {
+        var value = new Dictionary<string, object>(Wire.Map(ancestor));
+        if (input) value["name"] = "";
+        return value;
+    }).ToArray();
     return Wire.Obj("kind", "accessibility", "window", window, "role", Wire.Str(element, "role"), "name",
-                    Wire.Str(element, "name"), "automationId", Wire.Str(element, "automationId"), "className",
+                    input ? "" : Wire.Str(element, "name"), "automationId", Wire.Str(element, "automationId"), "className",
                     Wire.Str(element, "className"), "frameworkId", Wire.Str(element, "frameworkId"), "ancestorPath",
-                    element["ancestorPath"]);
+                    ancestors);
 }
 public static void Run(Dictionary<string, object> request)
 {
@@ -157,6 +163,7 @@ static void Session(Dictionary<string, object> request)
         Dictionary<string, object> pendingClick = null;
         Win.POINT downPoint = new Win.POINT();
         string hoverIdentity = "";
+        RecordedText text = null;
         Action<string, Dictionary<string, object>, Dictionary<string, object>> append =
             delegate(string kind, Dictionary<string, object> element, Dictionary<string, object> values)
         {
@@ -169,7 +176,7 @@ static void Session(Dictionary<string, object> request)
                 {
                     var previous = actions[actions.Count - 1];
                     bool same = Wire.Json.Serialize(previous["locators"]) == Wire.Json.Serialize(locators);
-                    if (same && Wire.Str(previous, "kind") == kind && RecordedPointer.CanCoalesce(kind) && (DateTime.UtcNow - last).TotalMilliseconds < 1500)
+                    if (same && Wire.Str(previous, "kind") == kind && RecordedPointer.CanCoalesce(kind))
                     {
                         if (kind == "inputText")
                         {
@@ -190,10 +197,14 @@ static void Session(Dictionary<string, object> request)
                 Wire.Write(Wire.Obj("event", "actions", "actions", actions.ToArray()));
             }
         };
+        text = new RecordedText(target, append, delegate(string message) {
+            Wire.Write(Wire.Obj("event", "warning", "message", message));
+        });
         Action stop = delegate
         {
             if (stopped)
                 return;
+            if (!picking) text.Boundary();
             stopped = true;
             context.ExitThread();
         };
@@ -201,8 +212,10 @@ static void Session(Dictionary<string, object> request)
             new Button { Text = "Pause Recording", Location = new Point(208, 6), Size = new Size(125, 30) };
         Action<bool> setPaused = delegate(bool value)
         {
+            if (value) text.Boundary();
             paused = value;
             pendingClick = null;
+            text.Reset();
             last = DateTime.MinValue;
             pauseButton.Text = value ? "Resume Recording" : "Pause Recording";
             Wire.Write(Wire.Obj("event", "state", "state", value ? "paused" : "recording"));
@@ -283,6 +296,7 @@ static void Session(Dictionary<string, object> request)
             }
             if (!picking && msg == 0x201)
             {
+                host.BeginInvoke((Action)delegate { if (!paused && !stopped) text.Boundary(); });
                 try
                 {
                     pendingClick = null;
@@ -329,12 +343,19 @@ static void Session(Dictionary<string, object> request)
                 host.BeginInvoke(stop);
                 return new IntPtr(1);
             }
-            if (!picking && !paused && Win.GetForegroundWindow() == target &&
-                (key.Code == 13 || key.Code == 9 || key.Code == 27 || key.Code >= 112 && key.Code <= 135 ||
-                 Win.GetAsyncKeyState(17) < 0 || Win.GetAsyncKeyState(18) < 0))
+            if (!picking && !paused && Win.GetForegroundWindow() == target)
             {
+                bool ctrl = Win.GetAsyncKeyState(17) < 0, alt = Win.GetAsyncKeyState(18) < 0,
+                     shift = Win.GetAsyncKeyState(16) < 0;
+                // UIA calls must never block a low-level hook (the target can be
+                // waiting for SendInput on its UI thread). Query on our message loop.
+                host.BeginInvoke((Action)delegate {
+                if (paused || stopped) return;
                 try
                 {
+                    bool control = key.Code == 13 || key.Code == 9 || key.Code == 27 || key.Code >= 112 && key.Code <= 135 || ctrl || alt;
+                    if (!control) text.BeforeKey(key.Code);
+                    if (!control) return;
                     var e = AutomationElement.FocusedElement;
                     if (e != null && Desktop.ElementWindow(e) == target)
                     {
@@ -345,8 +366,9 @@ static void Session(Dictionary<string, object> request)
                         }
                         else
                         {
-                            bool ctrl = Win.GetAsyncKeyState(17) < 0, alt = Win.GetAsyncKeyState(18) < 0,
-                                 shift = Win.GetAsyncKeyState(16) < 0;
+                            if (ctrl && !alt && RecordedText.IsInput(e) && (key.Code == 86 || key.Code == 88 || key.Code == 90 || key.Code == 89)) {
+                                text.BeforeKey(key.Code); return;
+                            }
                             string keyName = key.Code == 13                       ? "Enter"
                                              : key.Code == 9                      ? "Tab"
                                              : key.Code == 27                     ? "Escape"
@@ -356,6 +378,7 @@ static void Session(Dictionary<string, object> request)
                                 keyName = ((char)key.Code).ToString();
                             if (keyName != null)
                             {
+                                text.Boundary();
                                 var keys = new List<string>();
                                 if (ctrl)
                                     keys.Add("Ctrl");
@@ -373,6 +396,7 @@ static void Session(Dictionary<string, object> request)
                 catch
                 {
                 }
+                });
             }
         }
         return Win.CallNextHookEx(IntPtr.Zero, code, message, data);
@@ -390,6 +414,7 @@ static void Session(Dictionary<string, object> request)
     var timer = new System.Windows.Forms.Timer { Interval = 150 };
     AutomationPropertyChangedEventHandler changed = null;
     AutomationEventHandler invoked = null;
+    AutomationEventHandler textChanged = null;
     AutomationFocusChangedEventHandler focused = null;
     AutomationElement root = null;
     try
@@ -440,23 +465,15 @@ static void Session(Dictionary<string, object> request)
                     var e = sender as AutomationElement;
                     if (e == null || Desktop.ElementWindow(e) != target)
                         return;
-                    var info = Desktop.Info(e, target);
-                    if (e.Current.IsPassword)
-                    {
-                        append("inputSecret", info, Wire.Obj("secretRef", "unresolved"));
-                        return;
-                    }
-                    object pattern;
-                    if (RoleIsInput(e) && e.TryGetCurrentPattern(ValuePattern.Pattern, out pattern))
-                    {
-                        var value = ((ValuePattern)pattern).Current.Value;
-                        if (value.Length <= 32768)
-                            append("inputText", info, Wire.Obj("text", value));
-                    }
+                    host.BeginInvoke((Action)delegate { if (!paused && !stopped) text.Poll(true); });
                 }
                 catch
                 {
                 }
+            };
+            textChanged = delegate(object sender, AutomationEventArgs args) {
+                if (paused || stopped) return;
+                try { host.BeginInvoke((Action)delegate { if (!paused && !stopped) text.Poll(true); }); } catch { }
             };
             invoked = delegate(object sender, AutomationEventArgs args)
             {
@@ -488,7 +505,11 @@ static void Session(Dictionary<string, object> request)
             Automation.AddAutomationPropertyChangedEventHandler(root, TreeScope.Subtree, changed,
                                                                 ValuePattern.ValueProperty);
             Automation.AddAutomationEventHandler(InvokePattern.InvokedEvent, root, TreeScope.Subtree, invoked);
+            Automation.AddAutomationEventHandler(TextPattern.TextChangedEvent, root, TreeScope.Subtree, textChanged);
             Automation.AddAutomationFocusChangedEventHandler(focused);
+            timer.Tick += delegate { if (!paused && !stopped) text.Poll(false); };
+            text.Poll(false);
+            timer.Start();
             Wire.Write(Wire.Obj("event", "state", "state", "recording", "window", Desktop.WindowInfo(target)));
             Wire.Write(Wire.Obj("event", "actions", "actions", actions.ToArray()));
         }
@@ -505,6 +526,8 @@ static void Session(Dictionary<string, object> request)
             Automation.RemoveAutomationPropertyChangedEventHandler(root, changed);
         if (root != null && invoked != null)
             Automation.RemoveAutomationEventHandler(InvokePattern.InvokedEvent, root, invoked);
+        if (root != null && textChanged != null)
+            Automation.RemoveAutomationEventHandler(TextPattern.TextChangedEvent, root, textChanged);
         if (focused != null)
             Automation.RemoveAutomationFocusChangedEventHandler(focused);
         GC.KeepAlive(mouse);

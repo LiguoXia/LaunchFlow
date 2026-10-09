@@ -41,6 +41,7 @@ for (const name of [
   'RECORDING-REVIEW-FIX.md',
   'GUI-FOCUS-FIX.md',
   'RECORDED-CLICK-FIX.md',
+  'STARTUP-TEXT-FIX.md',
 ])
   await copyFile(join('docs', name), join(directory, name));
 const quote = (s) => "'" + s.replaceAll("'", "''") + "'";

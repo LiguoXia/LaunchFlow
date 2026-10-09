@@ -8,6 +8,7 @@ export default function DesktopStartup() {
   const [status, setStatus] = useState<StartupStatus | null>(null);
   const [error, setError] = useState('');
   const request = useRef(0);
+  const defaultScene = data.scenes.find((s) => s.isDefault);
   const load = useCallback(async () => {
     const revision = ++request.current;
     try {
@@ -28,7 +29,7 @@ export default function DesktopStartup() {
       request.current++;
       window.removeEventListener('focus', focus);
     };
-  }, [load]);
+  }, [load, defaultScene?.id, defaultScene?.version]);
   const mode = status?.task.enabled ? 'beforeUnlock' : status?.legacyEnabled ? 'login' : 'disabled';
   const condition = status?.conditions;
   const blocked = condition?.disabledByPolicy === 1 || condition?.mdmAllow === 0;
@@ -81,6 +82,98 @@ export default function DesktopStartup() {
           {error || status?.task.error}
         </p>
       )}
+      {status?.login?.registered && !status.login.matches && (
+        <p className="danger-text">
+          普通登录启动的路径或参数需要更新。
+          <button className="text-link" disabled={busy} onClick={() => setMode('login')}>
+            修复普通登录启动
+          </button>
+        </p>
+      )}
+      <div className="startup-guide">
+        <strong>默认场景自动执行检查</strong>
+        <p className={status?.readiness.ready ? 'success-text' : 'danger-text'} role="status">
+          {status?.readiness.message || '检测中…'}
+        </p>
+        {status?.readiness.canAuthorize && (
+          <>
+            <p>
+              允许后，此默认场景里的点击、文本输入、命令和 Secret 步骤可自动执行；Windows
+              系统授权仍需按要求确认。此操作只保存策略，不立即运行场景。
+            </p>
+            <button
+              className="button secondary"
+              disabled={busy}
+              onClick={() =>
+                void perform(async () => {
+                  await api.authorizeDefaultStartup(
+                    status.readiness.sceneId!,
+                    status.readiness.version!,
+                  );
+                  await refresh();
+                  await load();
+                  notify('已允许默认场景自动执行，请查看启动检查结果');
+                })
+              }
+            >
+              允许默认场景自动执行
+            </button>
+          </>
+        )}
+        {status?.observation?.result && (
+          <p className={status.observation.result.status === 'blocked' ? 'danger-text' : 'muted'}>
+            上次启动结果：{status.observation.result.message}
+          </p>
+        )}
+      </div>
+      <div className="startup-guide">
+        <strong>开机直接进入桌面</strong>
+        <p>
+          Windows 自动登录 → LaunchFlow 普通登录启动 → 执行默认场景。自动登录由 Windows 在
+          LaunchFlow 启动前完成，不需要添加解锁步骤或在工作流填写密码。
+        </p>
+        <ol>
+          <li>
+            打开下方 Microsoft Autologon 官方入口，下载并运行微软工具，在工具中填写 Windows
+            账户和密码，点击 Enable。
+          </li>
+          <li>将上方启动方式设为“普通登录启动”，并确认默认场景自动执行检查通过。</li>
+          <li>
+            下次开机或重启后由 Windows 登录。普通锁屏不会被 LaunchFlow
+            自动解锁；撤销自动登录请在微软工具中点击 Disable。
+          </li>
+        </ol>
+        <p className="muted">
+          配置后设备会直接进入该账户桌面，能接触设备的人也能使用此账户。密码由 Windows
+          保存，系统管理员可能读取；LaunchFlow 不读取、保存或导出 Windows 登录密码。
+        </p>
+        <p>
+          系统自动登录标记：
+          {condition?.autoLogonConfigured === true
+            ? '已开启，仍需重启验收账户与策略'
+            : condition?.autoLogonConfigured === false
+              ? '未开启'
+              : '无法检测'}
+        </p>
+        <div className="inline-actions">
+          <button
+            className="button secondary"
+            disabled={busy}
+            onClick={() => void perform(api.openAutologonSettings)}
+          >
+            <ExternalLink size={15} /> 打开 Microsoft Autologon 配置入口
+          </button>
+          {mode !== 'login' && (
+            <button
+              className="button secondary"
+              disabled={busy || !status}
+              onClick={() => setMode('login')}
+            >
+              切换为普通登录启动
+            </button>
+          )}
+        </div>
+      </div>
       <div className="startup-guide">
         <strong>开机后先准备，输入密码后直接使用</strong>
         <p>

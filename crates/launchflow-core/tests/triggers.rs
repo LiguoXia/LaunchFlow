@@ -140,6 +140,78 @@ async fn lifecycle_hotkey_and_default_login_use_registry() {
     assert_eq!(t.registry.definitions().len(), 10);
 }
 #[tokio::test]
+async fn startup_policy_rejection_is_visible_and_authorized_scene_passes_preflight() {
+    let e = Engine::new(
+        Arc::new(Store::memory().unwrap()),
+        Arc::new(NodeRegistry::builtins()),
+        native_platform(),
+    );
+    let mut s = Scene::new("startup policy fixture");
+    s.workflow.nodes.push(Node::new("gui.click", "fixture click", json!({"locators":[{"kind":"accessibility","window":{"title":"isolated nonexistent fixture"},"role":"Button","automationId":"go"}]})));
+    let s = e.store.save_scene(s).unwrap();
+    e.store.set_default(Some(&s.id)).unwrap();
+    let triggers = TriggerEngine::new(e.clone());
+    assert!(triggers
+        .startup()
+        .unwrap_err()
+        .to_string()
+        .contains("startupPolicyBlocked"));
+    let history = e.store.runs().unwrap();
+    assert_eq!(history.len(), 1);
+    assert_eq!(history[0].status, RunStatus::Failed);
+    assert_eq!(history[0].source, "startup");
+    assert!(history[0]
+        .node_runs
+        .iter()
+        .all(|n| n.status == NodeStatus::Skipped));
+    assert!(!e.has_active());
+    let mut authorized = e.store.scene(&s.id).unwrap();
+    authorized.sensitive_action_policy =
+        launchflow_core::policy::SensitiveActionPolicy::AllowForThisScene;
+    let authorized = e.store.save_scene(authorized).unwrap();
+    assert!(e.check_startup(&authorized, &Values::new()).is_ok());
+    assert_eq!(
+        e.store.runs().unwrap().len(),
+        1,
+        "Preflight must not execute input"
+    );
+}
+#[tokio::test]
+async fn startup_disabled_trigger_is_reported_and_duplicate_login_definitions_run_once() {
+    let e = Engine::new(
+        Arc::new(Store::memory().unwrap()),
+        Arc::new(NodeRegistry::builtins()),
+        native_platform(),
+    );
+    let mut s = scene(&e, "startup", "systemLogin", json!({}));
+    s.triggers[0].enabled = false;
+    let mut s = e.store.save_scene(s).unwrap();
+    e.store.set_default(Some(&s.id)).unwrap();
+    let triggers = TriggerEngine::new(e.clone());
+    assert!(triggers
+        .startup()
+        .unwrap_err()
+        .to_string()
+        .contains("startupTriggerDisabled"));
+    assert_eq!(e.store.runs().unwrap().len(), 1);
+    s.triggers[0].enabled = true;
+    let mut second = s.triggers[0].clone();
+    second.id = id();
+    s.triggers.push(second);
+    e.store.save_scene(s).unwrap();
+    triggers.startup().unwrap().unwrap();
+    settle(&e).await;
+    assert_eq!(
+        e.store
+            .runs()
+            .unwrap()
+            .iter()
+            .filter(|r| r.status == RunStatus::Succeeded)
+            .count(),
+        1
+    );
+}
+#[tokio::test]
 async fn sensor_transitions_are_edge_triggered_and_do_not_fire_initially() {
     let sensors = Arc::new(Sensors {
         monitors: AtomicU32::new(1),

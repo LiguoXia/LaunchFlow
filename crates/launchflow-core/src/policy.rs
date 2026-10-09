@@ -45,7 +45,7 @@ pub fn check<'a>(
                 if ["startup", "systemLogin", "appStarted"].contains(&source) =>
             {
                 return Err(Error::Validation(
-                    "Sensitive actions are blocked at system login by this scene's policy.".into(),
+                    "startupPolicyBlocked: 默认场景或子场景的策略阻止自动执行。请到设置 → 启动与后台，允许此场景自动执行；点击、文本输入、命令和密码输入均受此策略控制。".into(),
                 ))
             }
             _ => {}

@@ -8,11 +8,12 @@ import { tmpdir } from 'node:os';
 import { createServer } from 'node:net';
 const local = JSON.parse((await readFile('.local/build.json', 'utf8')).replace(/^\uFEFF/, ''));
 const binary = resolve(local.targetDir, 'debug/launchflow.exe');
-const dataDir = await mkdtemp(join(tmpdir(), 'launchflow-prestart-'));
+const dataDir = await mkdtemp(join(tmpdir(), 'launchflow prestart-'));
 const artifacts = resolve(process.argv[2] || 'test-results/desktop-startup');
 await mkdir(artifacts, { recursive: true });
 const checks = [],
   errors = [];
+const version = JSON.parse(await readFile('package.json', 'utf8')).version;
 let app,
   browser,
   page,
@@ -218,8 +219,106 @@ try {
     },
   );
   await check(
+    'Blocked GUI startup creates history and can be authorized without executing the scene',
+    async () => {
+      const initial = await invoke('bootstrap');
+      await invoke('save_settings', {
+        settings: { ...initial.settings, notifications: false, startupDelaySeconds: 0 },
+      });
+      let scene = await invoke('create_scene', { name: '启动策略回归' });
+      scene.workflow.nodes = [
+        {
+          id: 'policy-click',
+          type: 'gui.click',
+          name: '不会执行的独立点击',
+          description: '',
+          position: { x: 0, y: 0 },
+          enabled: true,
+          config: {
+            locators: [
+              {
+                kind: 'accessibility',
+                window: { title: 'LaunchFlow nonexistent startup fixture' },
+                role: 'Button',
+                automationId: 'go',
+              },
+            ],
+          },
+          retryPolicy: { maxRetries: 0, delayMs: 100 },
+          timeoutMs: 5000,
+          failurePolicy: 'stopWorkflow',
+          platformConstraint: [],
+          inputs: {},
+          outputs: {},
+          metadata: {},
+        },
+      ];
+      scene = await invoke('save_scene', { scene });
+      await invoke('set_default_scene', { sceneId: scene.id });
+      assert.equal((await invoke('startup_status')).readiness.code, 'policyBlocked');
+      const second = spawn(binary, ['--startup', '--test-data-dir', dataDir], {
+        windowsHide: true,
+        stdio: 'ignore',
+      });
+      await new Promise((r) => second.once('exit', r));
+      await expect
+        .poll(() => runs().filter((r) => r.source === 'startup' && r.status === 'failed').length)
+        .toBe(1);
+      assert.equal((await invoke('startup_status')).observation.result.code, 'policyBlocked');
+      await page.reload();
+      await page.getByRole('button', { name: '设置', exact: true }).click();
+      await page.getByRole('button', { name: '允许默认场景自动执行', exact: true }).click();
+      await expect.poll(async () => (await invoke('startup_status')).readiness.ready).toBe(true);
+      assert.equal(runs().length, 1);
+      await assert.rejects(() =>
+        invoke('authorize_default_startup', { sceneId: scene.id, version: scene.version }),
+      );
+      scene = (await invoke('bootstrap')).scenes.find((s) => s.id === scene.id);
+      scene.workflow.nodes[0].type = 'system.delay';
+      scene.workflow.nodes[0].config = { durationMs: 40 };
+      await invoke('save_scene', { scene });
+      await expect(
+        page.getByRole('button', { name: '打开 Microsoft Autologon 配置入口', exact: true }),
+      ).toBeVisible();
+    },
+  );
+  await check(
+    'Existing manual instance accepts startup once through the registered login command',
+    async () => {
+      await select('login');
+      await stop();
+      await start();
+      const runCommand = ps(
+        `$k=[Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Software\\Microsoft\\Windows\\CurrentVersion\\Run'); try {$k.GetValue(${quote(registrationId)})} finally {$k.Dispose()}`,
+      );
+      assert(runCommand.includes('--startup') && runCommand.includes(dataDir));
+      // Execute the exact isolated registration, without launching any user entry.
+      const prefix = `"${binary}"`;
+      assert(runCommand.toLowerCase().startsWith(prefix.toLowerCase()));
+      ps(
+        `Start-Process -FilePath ${quote(binary)} -ArgumentList ${quote(runCommand.slice(prefix.length).trim())} -Wait -WindowStyle Hidden`,
+      );
+      await expect
+        .poll(() => runs().filter((r) => r.source === 'startup' && r.status === 'succeeded').length)
+        .toBe(1);
+      const repeat = spawn(binary, ['--startup', '--test-data-dir', dataDir], {
+        windowsHide: true,
+        stdio: 'ignore',
+      });
+      await new Promise((r) => repeat.once('exit', r));
+      await sleep(500);
+      assert.equal(runs().length, 2);
+      await page.getByRole('button', { name: '设置', exact: true }).click();
+      await select('beforeUnlock');
+    },
+  );
+  await check(
     'Actual Task Scheduler launches the isolated app and runs its default scene once',
     async () => {
+      const earlier = runs().length;
+      const earlierSucceeded = runs().filter(
+        (r) => r.source === 'startup' && r.status === 'succeeded',
+      ).length;
       const initial = await invoke('bootstrap');
       await invoke('save_settings', {
         settings: { ...initial.settings, notifications: false, startupDelaySeconds: 0 },
@@ -257,7 +356,7 @@ try {
           () => runs().filter((r) => r.source === 'startup' && r.status === 'succeeded').length,
           { timeout: 30000, intervals: [500, 1000] },
         )
-        .toBe(1);
+        .toBe(earlierSucceeded + 1);
       const observation = JSON.parse(
         await readFile(join(dataDir, 'automation/startup-observation.json'), 'utf8'),
       );
@@ -269,7 +368,11 @@ try {
       });
       await new Promise((r) => second.once('exit', r));
       await sleep(1500);
-      assert.equal(runs().length, 1, 'Repeated startup invocation must not execute twice');
+      assert.equal(
+        runs().length,
+        earlier + 1,
+        'Repeated startup invocation must not execute twice',
+      );
       await writeFile(
         join(artifacts, 'scheduled-startup.json'),
         JSON.stringify({ observation, runs: runs() }, null, 2),
@@ -290,11 +393,14 @@ try {
     assert.equal(status.task.registered, false);
     assert.equal(status.legacyEnabled, false);
     await page.getByText('启动诊断', { exact: true }).click();
-    await expect(page.getByLabel('启动诊断内容')).toHaveValue(/0[.]4[.]9/);
+    await expect(page.getByLabel('启动诊断内容')).toHaveValue(
+      new RegExp(version.replaceAll('.', '[.]')),
+    );
     await page.screenshot({ path: join(artifacts, 'diagnostics.png'), fullPage: true });
   });
   assert.deepEqual(errors, []);
 } catch (e) {
+  errors.push(String(e));
   await page?.screenshot({ path: join(artifacts, 'failure.png'), fullPage: true }).catch(() => {});
   throw e;
 } finally {

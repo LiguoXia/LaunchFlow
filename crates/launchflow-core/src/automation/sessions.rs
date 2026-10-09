@@ -18,6 +18,8 @@ pub struct SessionState {
     pub actions: Vec<Value>,
     #[serde(default)]
     pub reviewed: bool,
+    #[serde(default)]
+    pub warnings: Vec<String>,
     pub error: Option<AutomationError>,
 }
 
@@ -128,6 +130,7 @@ impl SessionManager {
             locator: Value::Null,
             actions: vec![],
             reviewed: false,
+            warnings: vec![],
             error: None,
         };
         *self.state.lock().unwrap() = Some(state.clone());
@@ -187,6 +190,11 @@ impl SessionManager {
                                         stop_at = Some(tokio::time::Instant::now() + Duration::from_secs(2));
                                     }
                                 }
+                                "warning" => manager.publish(|s| {
+                                    if let Some(message) = event["message"].as_str().filter(|m|m.len() <= 1024) {
+                                        if s.warnings.len() < 8 && !s.warnings.iter().any(|m|m == message) { s.warnings.push(message.into()); }
+                                    }
+                                }),
                                 "cancelled" => manager.publish(|s| s.status = "cancelled".into()),
                                 "stopped" => {
                                     manager.publish(|s| {
@@ -240,6 +248,7 @@ mod tests {
             element: Value::Null,
             locator: Value::Null,
             actions: vec![json!({"kind":"click"})],
+            warnings: vec![],
             reviewed: false,
             error: None,
         }

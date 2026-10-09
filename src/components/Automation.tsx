@@ -604,6 +604,7 @@ export function AutomationToolbar({
   const [setup, setSetup] = useState(false);
   const [target, setTarget] = useState<WindowTarget>({});
   const [review, setReview] = useState<Record<string, unknown>[] | null>(null);
+  const [reviewWarnings, setReviewWarnings] = useState<string[]>([]);
   const [reviewBusy, setReviewBusy] = useState(false);
   const reviewGate = useRef(false);
   const session = useAutomationSession();
@@ -614,11 +615,13 @@ export function AutomationToolbar({
       session.status === 'stopped' &&
       !session.reviewed &&
       // Native recorders prepend activateWindow even when no user action was recorded.
-      session.actions.some((action) => action.kind !== 'activateWindow') &&
+      (session.actions.some((action) => action.kind !== 'activateWindow') ||
+        !!session.warnings?.length) &&
       finished.current !== session.id
     ) {
       finished.current = session.id;
       setReview(session.actions);
+      setReviewWarnings(session.warnings ?? []);
     }
   }, [session]);
   const safely = async (fn: () => Promise<unknown>) => {
@@ -678,6 +681,9 @@ export function AutomationToolbar({
         <Modal title="Start Recording" onClose={() => setSetup(false)}>
           <div className="modal-body form-stack">
             <p>选择一个目标窗口。开始后才记录操作；密码字段生成待绑定的 Secret 引用。</p>
+            <p>
+              中文输入记录输入法提交后的文字，请完成候选词选择再停止录制。若目标应用未公开输入框，会提示文字未能捕获。
+            </p>
             <WindowChooser value={target} onChange={setTarget} />
           </div>
           <div className="modal-footer">
@@ -698,6 +704,11 @@ export function AutomationToolbar({
       {review && (
         <Modal title="审阅录制 Actions" canClose={!reviewBusy} onClose={() => void finishReview()}>
           <div className="modal-body recording-review">
+            {reviewWarnings.map((message) => (
+              <p className="danger-text" role="alert" key={message}>
+                {message}
+              </p>
+            ))}
             <p>
               可编辑、删除或调整动作顺序。
               {isSequence(scene)
@@ -736,6 +747,22 @@ export function AutomationToolbar({
                     setReview(review.map((a, j) => (i === j ? (v as Record<string, unknown>) : a)))
                   }
                 />
+                {a.kind === 'inputText' && (
+                  <label>
+                    录制文字
+                    <textarea
+                      aria-label={`录制文字 ${i + 1}`}
+                      value={String(a.text ?? '')}
+                      onChange={(e) =>
+                        setReview(
+                          review.map((action, j) =>
+                            i === j ? { ...action, text: e.target.value } : action,
+                          ),
+                        )
+                      }
+                    />
+                  </label>
+                )}
               </div>
             ))}
           </div>

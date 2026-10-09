@@ -1,7 +1,7 @@
 use crate::{ApiResult, AppState};
 use serde_json::{json, Value};
-use std::{fs, path::PathBuf};
-use tauri::State;
+use std::{fs, path::PathBuf, sync::atomic::Ordering, time::Duration};
+use tauri::{Manager, State};
 use tauri_plugin_autostart::ManagerExt;
 
 pub async fn task(app: &tauri::AppHandle, state: &AppState, action: &str) -> ApiResult<Value> {
@@ -46,6 +46,9 @@ pub async fn set_startup_mode(
         "login" => {
             // Establish the replacement first. A failed transition remains visible in status.
             app.autolaunch().enable().map_err(|e| e.to_string())?;
+            if state.engine.platform.os() == "windows" {
+                task(&app, &state, "quoteLogin").await?;
+            }
             task(&app, &state, "disable").await?;
         }
         "disabled" => {
@@ -85,8 +88,136 @@ pub fn record(state: &AppState, phase: &str) {
     }
 }
 
+fn reason(error: &str) -> (&'static str, &'static str) {
+    if error.contains("startupPolicyBlocked") || error.contains("sensitiveApprovalRequired") {
+        (
+            "policyBlocked",
+            "场景策略阻止自动执行。请允许默认场景及其子场景自动执行。",
+        )
+    } else if error.contains("startupTriggerDisabled") {
+        (
+            "triggerDisabled",
+            "默认场景的登录触发器已禁用，请在场景设置中启用。",
+        )
+    } else {
+        (
+            "invalidScene",
+            "默认场景未通过启动检查。请检查场景、应用路径和必填参数；详细原因见运行历史。",
+        )
+    }
+}
+
+fn readiness(state: &AppState) -> Value {
+    let default = state
+        .engine
+        .store
+        .scenes()
+        .ok()
+        .and_then(|scenes| scenes.into_iter().find(|s| s.is_default));
+    let check = state.triggers.startup_scene().and_then(|plan| {
+        if let Some((scene, values)) = plan {
+            state.engine.check_startup(&scene, &values).map(|_| true)
+        } else {
+            Ok(false)
+        }
+    });
+    let (ready, code, message) = match check {
+        Ok(true) => (true, "ready", "默认场景已通过启动检查，自动启动时会执行。"),
+        Ok(false) => (false, "noDefault", "尚未选择默认场景。"),
+        Err(error) => {
+            let (code, message) = reason(&error.to_string());
+            (false, code, message)
+        }
+    };
+    json!({"ready":ready,"code":code,"message":message,"sceneId":default.as_ref().map(|s|&s.id),
+        "version":default.as_ref().map(|s|s.version),"canAuthorize":code == "policyBlocked" && default.as_ref().is_some_and(|s|s.sensitive_action_policy != launchflow_core::policy::SensitiveActionPolicy::AllowForThisScene)})
+}
+
+pub fn request(app: &tauri::AppHandle) {
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        // A second process can arrive before the first process finishes setup.
+        for _ in 0..100 {
+            if app.try_state::<AppState>().is_some() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+        let Some(state) = app.try_state::<AppState>() else {
+            return;
+        };
+        if state.startup_requested.swap(true, Ordering::SeqCst) {
+            return;
+        }
+        record(&state, "started");
+        let delay = state
+            .engine
+            .store
+            .settings()
+            .map(|s| s.startup_delay_seconds)
+            .unwrap_or(5);
+        tokio::select! {
+            _ = state.startup_cancel.cancelled() => return,
+            _ = tokio::time::sleep(Duration::from_secs(delay)) => {}
+        }
+        record(&state, "dispatch");
+        let result = state.triggers.startup();
+        let (status, code, message) = match result {
+            Ok(Some(_)) => (
+                "dispatched",
+                "ready",
+                "默认场景已提交执行，结果见运行历史。",
+            ),
+            Ok(None) => ("skipped", "noDefault", "尚未选择默认场景。"),
+            Err(error) => {
+                let (code, message) = reason(&error.to_string());
+                ("blocked", code, message)
+            }
+        };
+        let file = observation_file(&state);
+        let mut value: Value = fs::read(&file)
+            .ok()
+            .and_then(|v| serde_json::from_slice(&v).ok())
+            .unwrap_or(json!({}));
+        value["result"] = json!({"at":launchflow_core::model::now(),"status":status,"code":code,"message":message});
+        if let Ok(bytes) = serde_json::to_vec(&value) {
+            let _ = fs::write(file, bytes);
+        }
+        if status == "blocked" {
+            crate::notify(&app, "LaunchFlow · 默认场景未启动", message);
+        }
+    });
+}
+
+#[tauri::command]
+pub fn authorize_default_startup(
+    scene_id: String,
+    version: u32,
+    state: State<'_, AppState>,
+) -> ApiResult<()> {
+    let mut scene = state
+        .engine
+        .store
+        .scene(&scene_id)
+        .map_err(|e| e.to_string())?;
+    if !scene.is_default || scene.version != version {
+        return Err("默认场景已改变，请刷新后重试。".into());
+    }
+    scene.sensitive_action_policy =
+        launchflow_core::policy::SensitiveActionPolicy::AllowForThisScene;
+    state
+        .engine
+        .store
+        .save_scene(scene)
+        .map_err(|e| e.to_string())?;
+    state.triggers.refresh().map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub async fn startup_status(app: tauri::AppHandle, state: State<'_, AppState>) -> ApiResult<Value> {
+    let login = task(&app, &state, "loginStatus")
+        .await
+        .unwrap_or(Value::Null);
     let task = task(&app, &state, "status")
         .await
         .unwrap_or_else(|e| json!({"error":e}));
@@ -110,7 +241,7 @@ pub async fn startup_status(app: tauri::AppHandle, state: State<'_, AppState>) -
         .unwrap_or(Value::Null);
     Ok(
         json!({"registrationId":app.config().identifier,"legacyEnabled":app.autolaunch().is_enabled().map_err(|e|e.to_string())?,
-        "task":task,"conditions":conditions,"observation":observation,
+        "task":task,"login":login,"conditions":conditions,"observation":observation,"readiness":readiness(&state),
         "desktopReady":state.engine.platform.desktop_ready()}),
     )
 }
@@ -125,6 +256,21 @@ pub async fn open_signin_settings(state: State<'_, AppState>) -> ApiResult<()> {
         .platform
         .automation()
         .request(json!({"op":"openSigninSettings"}))
+        .await
+        .map_err(|e| e.message)?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn open_autologon_settings(state: State<'_, AppState>) -> ApiResult<()> {
+    if state.engine.platform.os() != "windows" {
+        return Err("此入口仅适用于 Windows。".into());
+    }
+    state
+        .engine
+        .platform
+        .automation()
+        .request(json!({"op":"openAutologonSettings"}))
         .await
         .map_err(|e| e.message)?;
     Ok(())

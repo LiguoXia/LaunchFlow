@@ -70,6 +70,11 @@ async function record(text = 'review fixture') {
   await dialog.getByRole('button', { name: 'Start Recording', exact: true }).click();
   await expect(page.getByText('Recording 录制中', { exact: true })).toBeVisible();
   if (text) {
+    const target = (await callNative({ op: 'windows' })).find((w) => w.pid === harness.pid);
+    execFileSync(foregroundFixture, [String(harness.pid), target.handle, '--caption'], {
+      windowsHide: true,
+      timeout: 8000,
+    });
     await callNative({
       op: 'perform',
       window,

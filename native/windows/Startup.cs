@@ -46,6 +46,18 @@ namespace LaunchFlow.Native
             // Test profiles are passed explicitly because Task Scheduler does not inherit the test environment.
             string testData = Wire.Str(request, "testData");
             string arguments = "--startup" + (String.IsNullOrEmpty(testData) ? "" : " --test-data-dir " + ApplicationLauncher.Quote(testData));
+            if (action == "loginStatus" || action == "quoteLogin") {
+                string registration = Wire.Str(request, "namespace").StartsWith("app.launchflow.test", StringComparison.Ordinal) ? Wire.Str(request, "namespace") : "launchflow";
+                string command = "\"" + launcher + "\" " + arguments;
+                using (var run = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run", action == "quoteLogin")) {
+                    if (action == "quoteLogin") {
+                        if (run == null || !File.Exists(launcher)) throw new NativeFailure("startupFailed", "登录启动路径无效，请重新登记。");
+                        run.SetValue(registration, command, RegistryValueKind.String);
+                    }
+                    string current = run == null ? null : run.GetValue(registration) as string;
+                    return Wire.Obj("registered", current != null, "matches", String.Equals(current, command, StringComparison.OrdinalIgnoreCase));
+                }
+            }
             try {
                 dynamic service = Activator.CreateInstance(Type.GetTypeFromProgID("Schedule.Service")); service.Connect();
                 dynamic folder = service.GetFolder("\\"), task = Find(folder, name);
@@ -108,7 +120,18 @@ namespace LaunchFlow.Native
                 "securityMode", Dword(policy, "AutomaticRestartSignOnConfig"),
                 "userOptOut", Dword(@"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon\UserARSO\" + Sid, "OptOut"),
                 "mdmAllow", Dword(@"SOFTWARE\Microsoft\PolicyManager\current\device\WindowsLogon", "AllowAutomaticRestartSignOn"),
-                "domainJoined", domain, "entraJoined", entra);
+                "domainJoined", domain, "entraJoined", entra, "autoLogonConfigured", AutoLogonConfigured());
+        }
+        static object AutoLogonConfigured() {
+            // Read the enable flag only. Never read DefaultPassword or LSA secrets.
+            try { using (var root = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64))
+                using (var key = root.OpenSubKey(@"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"))
+                    return key == null ? (object)null : String.Equals(Convert.ToString(key.GetValue("AutoAdminLogon", "0")), "1", StringComparison.Ordinal); }
+            catch { return null; }
+        }
+        public static object OpenAutologon() {
+            Process.Start(new ProcessStartInfo("https://learn.microsoft.com/en-us/sysinternals/downloads/autologon") { UseShellExecute = true });
+            return Wire.Obj("opened", true);
         }
         public static object OpenSettings() {
             Process.Start(new ProcessStartInfo("ms-settings:signinoptions") { UseShellExecute = true });
