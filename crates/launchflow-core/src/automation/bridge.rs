@@ -47,7 +47,14 @@ impl AutomationProvider for NativeAutomation {
     }
     async fn request(&self, request: Value) -> AutomationResult<Value> {
         let closing = request["op"] == "workspaceClose" && request["action"] != "status";
-        let deadline = Duration::from_secs(if closing { 180 } else { 15 });
+        let configuring_login = request["op"] == "configureAutologon";
+        let deadline = Duration::from_secs(if configuring_login {
+            660
+        } else if closing {
+            180
+        } else {
+            15
+        });
         let input = serde_json::to_vec(&request).map_err(|_| {
             AutomationError::new("invalidRequest", "Native request could not be encoded")
         })?;
@@ -62,12 +69,20 @@ impl AutomationProvider for NativeAutomation {
                 AutomationError::new("workerUnavailable", "Could not start native worker")
             })?;
             #[cfg(windows)]
-            let _scope = crate::platform::windows::CommandScope::attach(&child).map_err(|_| {
-                AutomationError::new(
-                    "workerUnavailable",
-                    "Could not manage native worker lifetime",
+            // The interactive configuration dialog must survive a broker response and UAC;
+            // it watches this broker and closes when its parent disappears. No password is sent here.
+            let _scope = if configuring_login {
+                None
+            } else {
+                Some(
+                    crate::platform::windows::CommandScope::attach(&child).map_err(|_| {
+                        AutomationError::new(
+                            "workerUnavailable",
+                            "Could not manage native worker lifetime",
+                        )
+                    })?,
                 )
-            })?;
+            };
             // The worker waits for stdin. Hand off our foreground permission to this exact
             // process before it tries to activate a recorded window; never grant ASFW_ANY.
             #[cfg(windows)]
@@ -137,7 +152,9 @@ impl AutomationProvider for NativeAutomation {
         tokio::time::timeout(deadline, future).await.map_err(|_| {
             AutomationError::new(
                 "nativeTimeout",
-                if closing {
+                if configuring_login {
+                    "自动登录配置等待超时，请检查配置窗口与系统状态后重试。"
+                } else if closing {
                     "等待管理员关闭授权超时，请检查应用退出状态后重试。"
                 } else {
                     "Accessibility provider did not respond within 15 seconds"

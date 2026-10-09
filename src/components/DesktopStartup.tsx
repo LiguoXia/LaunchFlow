@@ -7,6 +7,7 @@ export default function DesktopStartup() {
   const { data, perform, refresh, busy, notify } = useWorkspace();
   const [status, setStatus] = useState<StartupStatus | null>(null);
   const [error, setError] = useState('');
+  const [loginMessage, setLoginMessage] = useState('');
   const request = useRef(0);
   const defaultScene = data.scenes.find((s) => s.isDefault);
   const load = useCallback(async () => {
@@ -42,7 +43,46 @@ export default function DesktopStartup() {
         : '需在 Windows 登录选项中确认';
   const managed = condition?.domainJoined || condition?.entraJoined;
   const observation = status?.observation?.started;
-  const diagnostics = JSON.stringify({ version: data.version, startup: status, error }, null, 2);
+  const diagnostics = JSON.stringify(
+    { version: data.version, startup: status, error, loginMessage },
+    null,
+    2,
+  );
+  const autologonUrl = 'https://learn.microsoft.com/en-us/sysinternals/downloads/autologon';
+  const configureLogin = () =>
+    void perform(async () => {
+      setLoginMessage('请完成 Windows 管理员授权，在 LaunchFlow 配置窗口中填写账户密码。');
+      try {
+        const result = await api.configureAutologon();
+        if (result.status === 'enabled') {
+          setLoginMessage('Windows 自动登录已配置，正在登记 LaunchFlow 普通登录启动…');
+          try {
+            await api.setStartupMode('login');
+          } catch {
+            throw new Error(
+              'Windows 自动登录已保存，但 LaunchFlow 启动登记失败。请点击“切换为普通登录启动”重试。',
+            );
+          }
+          setLoginMessage(
+            '已配置 Windows 自动登录和 LaunchFlow 普通登录启动。请确认上方默认场景检查通过，再自行重启验收。',
+          );
+          notify('自动登录配置已保存，下次开机生效');
+        } else if (result.status === 'disabled') {
+          setLoginMessage(
+            '已关闭 Windows 自动登录，并清除 LaunchFlow 保存的自动登录密码。LaunchFlow 登录后启动设置保持不变。',
+          );
+          notify('已关闭 Windows 自动登录');
+        } else {
+          setLoginMessage('已取消，Windows 自动登录配置未更改。');
+        }
+      } catch (e) {
+        setLoginMessage(String(e));
+        throw e;
+      } finally {
+        await load();
+        await refresh();
+      }
+    });
   const setMode = (next: 'login' | 'beforeUnlock' | 'disabled') =>
     void perform(async () => {
       try {
@@ -134,34 +174,54 @@ export default function DesktopStartup() {
         </p>
         <ol>
           <li>
-            打开下方 Microsoft Autologon 官方入口，下载并运行微软工具，在工具中填写 Windows
-            账户和密码，点击 Enable。
+            点击“在 LaunchFlow 中配置自动登录”，完成一次 Windows 管理员授权，在内置窗口中填写
+            当前账户的密码。Microsoft 账户请选择对应类型并填写邮箱；不能用 Windows Hello PIN
+            代替密码。
           </li>
-          <li>将上方启动方式设为“普通登录启动”，并确认默认场景自动执行检查通过。</li>
+          <li>保存成功后自动设置“普通登录启动”，请确认上方默认场景自动执行检查通过。</li>
           <li>
-            下次开机或重启后由 Windows 登录。普通锁屏不会被 LaunchFlow
-            自动解锁；撤销自动登录请在微软工具中点击 Disable。
+            下次开机或重启后由 Windows 登录。普通锁屏不会被 LaunchFlow 自动解锁，原有 PIN
+            登录仍保留。再次打开内置配置窗口可更新密码或关闭自动登录。
           </li>
         </ol>
         <p className="muted">
-          配置后设备会直接进入该账户桌面，能接触设备的人也能使用此账户。密码由 Windows
-          保存，系统管理员可能读取；LaunchFlow 不读取、保存或导出 Windows 登录密码。
+          配置后设备会直接进入该账户桌面，能接触设备的人也能使用此账户。密码由 Windows LSA
+          保存，系统管理员可能读取。密码仅在本机管理员配置窗口处理，不进入场景、诊断日志或导出文件。
         </p>
         <p>
           系统自动登录标记：
           {condition?.autoLogonConfigured === true
-            ? '已开启，仍需重启验收账户与策略'
+            ? `已开启${condition.autoLogonManaged ? ' · 由 LaunchFlow 登记' : ' · 外部配置'}，仍需重启验收`
             : condition?.autoLogonConfigured === false
               ? '未开启'
               : '无法检测'}
         </p>
         <div className="inline-actions">
+          <button className="button primary" disabled={busy || !status} onClick={configureLogin}>
+            在 LaunchFlow 中配置自动登录
+          </button>
           <button
             className="button secondary"
             disabled={busy}
-            onClick={() => void perform(api.openAutologonSettings)}
+            onClick={() =>
+              void perform(async () => {
+                await api.openAutologonSettings();
+                notify('已请求默认浏览器打开微软说明。如未显示，可复制说明地址。');
+              })
+            }
           >
-            <ExternalLink size={15} /> 打开 Microsoft Autologon 配置入口
+            <ExternalLink size={15} /> 打开 Microsoft Autologon 说明
+          </button>
+          <button
+            className="button secondary"
+            onClick={() =>
+              void navigator.clipboard
+                .writeText(autologonUrl)
+                .then(() => notify('微软说明地址已复制'))
+                .catch(() => setLoginMessage(`请复制地址：${autologonUrl}`))
+            }
+          >
+            <Copy size={15} /> 复制说明地址
           </button>
           {mode !== 'login' && (
             <button
@@ -173,6 +233,7 @@ export default function DesktopStartup() {
             </button>
           )}
         </div>
+        {loginMessage && <p role="status">{loginMessage}</p>}
       </div>
       <div className="startup-guide">
         <strong>开机后先准备，输入密码后直接使用</strong>
@@ -220,8 +281,8 @@ export default function DesktopStartup() {
           确认的步骤等待解锁后继续，流程顺序保持不变。
         </p>
         <p className="muted">
-          登录信息由 Windows 管理，LaunchFlow
-          不收集密码。自动登录并锁定涉及系统凭据处理，请在你信任并妥善保管的设备上启用。
+          此“自动登录并锁定”模式无需填写密码，登录信息由 Windows
+          管理。请在你信任并妥善保管的设备上启用。
         </p>
         <div className="inline-actions">
           <button

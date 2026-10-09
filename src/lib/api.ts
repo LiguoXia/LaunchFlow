@@ -31,6 +31,7 @@ export interface StartupStatus {
     domainJoined?: boolean | null;
     entraJoined?: boolean | null;
     autoLogonConfigured?: boolean | null;
+    autoLogonManaged?: boolean;
   };
   observation: {
     started?: { at: string; desktopReady: boolean };
@@ -58,6 +59,8 @@ export const api = {
     invoke<void>('set_startup_mode', { mode }),
   openSigninSettings: () => invoke<void>('open_signin_settings'),
   openAutologonSettings: () => invoke<void>('open_autologon_settings'),
+  configureAutologon: () =>
+    invoke<{ status: 'enabled' | 'disabled' | 'cancelled' }>('configure_autologon'),
   authorizeDefaultStartup: (sceneId: string, version: number) =>
     invoke<void>('authorize_default_startup', { sceneId, version }),
   onCloseWorkspace: (fn: () => void) => listen('launchflow://closeWorkspace', fn),

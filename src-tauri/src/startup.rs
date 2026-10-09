@@ -254,10 +254,9 @@ pub async fn open_signin_settings(state: State<'_, AppState>) -> ApiResult<()> {
     state
         .engine
         .platform
-        .automation()
-        .request(json!({"op":"openSigninSettings"}))
+        .open_target("ms-settings:signinoptions")
         .await
-        .map_err(|e| e.message)?;
+        .map_err(|_| "Windows 登录选项未能打开，请从系统设置进入账户 → 登录选项。".to_string())?;
     Ok(())
 }
 
@@ -269,9 +268,26 @@ pub async fn open_autologon_settings(state: State<'_, AppState>) -> ApiResult<()
     state
         .engine
         .platform
-        .automation()
-        .request(json!({"op":"openAutologonSettings"}))
+        .open_target("https://learn.microsoft.com/en-us/sysinternals/downloads/autologon")
         .await
-        .map_err(|e| e.message)?;
+        .map_err(|_| "默认浏览器未能打开，请使用页面上的复制地址按钮。".to_string())?;
     Ok(())
+}
+
+#[tauri::command]
+pub async fn configure_autologon(state: State<'_, AppState>) -> ApiResult<Value> {
+    if state.engine.platform.os() != "windows" {
+        return Err("自动登录配置仅适用于 Windows。".into());
+    }
+    if cfg!(debug_assertions) && std::env::var_os("LAUNCHFLOW_TEST_DATA_DIR").is_some() {
+        return Err("隔离测试模式不会请求管理员授权或修改 Windows 自动登录。".into());
+    }
+    let _guard = state.startup_settings.lock().await;
+    state
+        .engine
+        .platform
+        .automation()
+        .request(json!({"op":"configureAutologon"}))
+        .await
+        .map_err(|e| e.message)
 }

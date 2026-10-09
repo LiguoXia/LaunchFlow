@@ -120,7 +120,8 @@ namespace LaunchFlow.Native
                 "securityMode", Dword(policy, "AutomaticRestartSignOnConfig"),
                 "userOptOut", Dword(@"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon\UserARSO\" + Sid, "OptOut"),
                 "mdmAllow", Dword(@"SOFTWARE\Microsoft\PolicyManager\current\device\WindowsLogon", "AllowAutomaticRestartSignOn"),
-                "domainJoined", domain, "entraJoined", entra, "autoLogonConfigured", AutoLogonConfigured());
+                "domainJoined", domain, "entraJoined", entra, "autoLogonConfigured", AutoLogonConfigured(),
+                "autoLogonManaged", Wire.Bool(Wire.Map(WindowsAutoLogonStore.Status()), "managed"));
         }
         static object AutoLogonConfigured() {
             // Read the enable flag only. Never read DefaultPassword or LSA secrets.
@@ -128,14 +129,6 @@ namespace LaunchFlow.Native
                 using (var key = root.OpenSubKey(@"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"))
                     return key == null ? (object)null : String.Equals(Convert.ToString(key.GetValue("AutoAdminLogon", "0")), "1", StringComparison.Ordinal); }
             catch { return null; }
-        }
-        public static object OpenAutologon() {
-            Process.Start(new ProcessStartInfo("https://learn.microsoft.com/en-us/sysinternals/downloads/autologon") { UseShellExecute = true });
-            return Wire.Obj("opened", true);
-        }
-        public static object OpenSettings() {
-            Process.Start(new ProcessStartInfo("ms-settings:signinoptions") { UseShellExecute = true });
-            return Wire.Obj("opened", true);
         }
     }
 }

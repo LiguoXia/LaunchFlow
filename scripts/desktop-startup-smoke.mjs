@@ -129,6 +129,82 @@ try {
     ).toBeVisible();
   });
   await check(
+    'Isolated auto-login configuration rejects before UAC and shows the reason',
+    async () => {
+      await page.getByRole('button', { name: '在 LaunchFlow 中配置自动登录', exact: true }).click();
+      await expect(
+        page
+          .getByText('隔离测试模式不会请求管理员授权或修改 Windows 自动登录。', { exact: true })
+          .first(),
+      ).toBeVisible();
+      assert.equal((await invoke('startup_status')).legacyEnabled, false);
+    },
+  );
+  await check(
+    'Auto-login settings handle save, cancel, disable and documentation feedback (UI response fixtures)',
+    async () => {
+      await page.evaluate(() => {
+        window.__loginOriginal = window.fetch;
+        window.__loginResult = 'enabled';
+        window.__helpOpened = 0;
+        window.fetch = async (input, ...args) => {
+          const path = new URL(String(input)).pathname;
+          if (path === '/configure_autologon')
+            return new Response(JSON.stringify({ status: window.__loginResult }), {
+              headers: { 'Content-Type': 'application/json', 'Tauri-Response': 'ok' },
+            });
+          if (path === '/open_autologon_settings') {
+            window.__helpOpened++;
+            return new Response('null', {
+              headers: { 'Content-Type': 'application/json', 'Tauri-Response': 'ok' },
+            });
+          }
+          return window.__loginOriginal(input, ...args);
+        };
+      });
+      const button = page.getByRole('button', {
+        name: '在 LaunchFlow 中配置自动登录',
+        exact: true,
+      });
+      await button.click();
+      await expect(
+        page
+          .getByRole('status')
+          .filter({ hasText: '已配置 Windows 自动登录和 LaunchFlow 普通登录启动。' }),
+      ).toBeVisible();
+      assert.equal((await invoke('startup_status')).legacyEnabled, true);
+      await page.evaluate(() => {
+        window.__loginResult = 'cancelled';
+      });
+      await button.click();
+      await expect(
+        page.getByText('已取消，Windows 自动登录配置未更改。', { exact: true }),
+      ).toBeVisible();
+      await page.evaluate(() => {
+        window.__loginResult = 'disabled';
+      });
+      await button.click();
+      await expect(
+        page
+          .getByRole('status')
+          .filter({ hasText: '已关闭 Windows 自动登录，并清除 LaunchFlow 保存的自动登录密码。' }),
+      ).toBeVisible();
+      assert.equal((await invoke('startup_status')).legacyEnabled, true);
+      await page
+        .getByRole('button', { name: '打开 Microsoft Autologon 说明', exact: true })
+        .click();
+      await expect(
+        page.getByText('已请求默认浏览器打开微软说明。如未显示，可复制说明地址。', { exact: true }),
+      ).toBeVisible();
+      assert.equal(await page.evaluate(() => window.__helpOpened), 1);
+      await expect(page.getByRole('button', { name: '复制说明地址', exact: true })).toBeVisible();
+      await page.evaluate(() => {
+        window.fetch = window.__loginOriginal;
+      });
+      await select('disabled');
+    },
+  );
+  await check(
     'UI registers current-user interactive least-privilege task without credentials',
     async () => {
       await select('beforeUnlock');
@@ -278,7 +354,7 @@ try {
       scene.workflow.nodes[0].config = { durationMs: 40 };
       await invoke('save_scene', { scene });
       await expect(
-        page.getByRole('button', { name: '打开 Microsoft Autologon 配置入口', exact: true }),
+        page.getByRole('button', { name: '在 LaunchFlow 中配置自动登录', exact: true }),
       ).toBeVisible();
     },
   );

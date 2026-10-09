@@ -69,6 +69,8 @@ if (process.platform === 'win32') {
     'ApplicationTrace.cs',
     'ApplicationIcons.cs',
     'Startup.cs',
+    'AutoLogon.cs',
+    'AutoLogonDialog.cs',
   ];
   for (const [name, sources, kind, entry] of [
     ['automation', workerSources, 'exe'],

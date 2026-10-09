@@ -542,8 +542,7 @@ namespace LaunchFlow.Native
             string op = Wire.Str(request, "op");
             if (op == "desktopStartup") return DesktopStartup.Task(request);
             if (op == "desktopStartupConditions") return DesktopStartup.Conditions();
-            if (op == "openSigninSettings") return DesktopStartup.OpenSettings();
-            if (op == "openAutologonSettings") return DesktopStartup.OpenAutologon();
+            if (op == "configureAutologon") return AutoLogonDialog.Request();
             if (op == "applicationIcons") return ApplicationIcons.ReadBatch(request);
             if (op == "vault") return Vault.Dispatch(request);
             if (op == "displays") return WorkspaceDesktop.Displays();

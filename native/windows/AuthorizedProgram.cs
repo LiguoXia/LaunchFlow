@@ -8,6 +8,7 @@ namespace LaunchFlow.Native
         [STAThread]
         public static int Main(string[] args)
         {
+            if(args.Length==4 && args[0]=="--configure-autologon")return AutoLogonDialog.Run(args[1],args[2],args[3]);
             if(args.Length==4 && args[0]=="--close-workspace")return WorkspaceCloseElevation.Run(args[1],args[2],args[3]);
             return args.Length == 3 && args[0] == "--run-authorized"
                 ? TaskAuthorization.RunElevated(args[1], args[2]) : 11;

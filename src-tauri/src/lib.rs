@@ -559,6 +559,7 @@ pub fn run() {
             set_startup_mode,
             open_signin_settings,
             open_autologon_settings,
+            configure_autologon,
             authorize_default_startup,
             application_icons,
             workspace_close_capture,
