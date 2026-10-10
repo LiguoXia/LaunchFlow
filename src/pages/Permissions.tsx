@@ -44,7 +44,7 @@ export default function Permissions() {
     void refresh();
   }, []);
   return (
-    <div className="page">
+    <div className="page permissions-page">
       <PageTitle
         eyebrow="PERMISSIONS & SECRETS"
         title="权限与凭据"
@@ -183,41 +183,68 @@ export default function Permissions() {
               });
             }}
           >
-            <label>
-              凭据 ID
-              <input
-                required
-                pattern="[A-Za-z0-9_.\-]{1,64}"
-                maxLength={64}
-                autoComplete="off"
-                disabled={draft.update}
-                value={draft.id}
-                onChange={(e) => setDraft({ ...draft, id: e.target.value })}
-              />
-            </label>
-            <label>
-              显示名称
-              <input
-                maxLength={80}
-                value={draft.label}
-                onChange={(e) => setDraft({ ...draft, label: e.target.value })}
-              />
-            </label>
-            <label>
-              新凭据值
-              <input
-                type="password"
-                required
-                autoComplete="new-password"
-                spellCheck={false}
-                value={draft.value}
-                onChange={(e) => setDraft({ ...draft, value: e.target.value })}
-              />
-            </label>
-            <p className="muted">保存后无法在界面查看明文。可直接替换凭据值；不会改变引用 ID。</p>
-            <button type="submit" className="button primary" disabled={busy}>
-              保存到系统凭据库
-            </button>
+            <div className="modal-body form-stack">
+              <p className="muted">凭据仅保存在此设备，工作流通过引用 ID 使用。</p>
+              <div>
+                <label>
+                  凭据 ID
+                  <input
+                    required
+                    pattern="[A-Za-z0-9_.\-]{1,64}"
+                    maxLength={64}
+                    autoComplete="off"
+                    disabled={draft.update}
+                    value={draft.id}
+                    placeholder="例如：work-account"
+                    aria-describedby="secret-id-hint"
+                    onChange={(e) => setDraft({ ...draft, id: e.target.value })}
+                  />
+                </label>
+                <small id="secret-id-hint">
+                  {draft.update
+                    ? `引用为 vault:${draft.id}，更新时保持不变。`
+                    : '支持字母、数字、下划线、短横线和点，最多 64 个字符。'}
+                </small>
+              </div>
+              <label>
+                显示名称
+                <input
+                  maxLength={80}
+                  value={draft.label}
+                  placeholder="例如：工作账号（可选）"
+                  onChange={(e) => setDraft({ ...draft, label: e.target.value })}
+                />
+              </label>
+              <label>
+                新凭据值
+                <input
+                  type="password"
+                  required
+                  autoComplete="new-password"
+                  spellCheck={false}
+                  value={draft.value}
+                  placeholder={draft.update ? '输入新的凭据值以替换' : '输入需要保存的凭据值'}
+                  aria-describedby="secret-value-hint"
+                  onChange={(e) => setDraft({ ...draft, value: e.target.value })}
+                />
+              </label>
+              <p className="form-note" id="secret-value-hint">
+                保存后无法在界面查看明文。可直接替换凭据值；不会改变引用 ID。
+              </p>
+            </div>
+            <div className="modal-footer">
+              <button
+                type="button"
+                className="button secondary"
+                disabled={busy}
+                onClick={() => setDraft(null)}
+              >
+                取消
+              </button>
+              <button type="submit" className="button primary" disabled={busy}>
+                保存到系统凭据库
+              </button>
+            </div>
           </form>
         </Modal>
       )}

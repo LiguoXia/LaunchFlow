@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { open, save } from '@tauri-apps/plugin-dialog';
-import { Download, Upload, Check, RefreshCw } from 'lucide-react';
+import { Download, Upload, Check, RefreshCw, ChevronDown } from 'lucide-react';
 import { PageTitle } from '../components/ui';
 import ApplicationIcon from '../components/ApplicationIcon';
 import { product, type ImportPreview, type Mappings } from '../lib/product';
@@ -54,7 +54,7 @@ export default function Transfer() {
     setReviewed(false);
   };
   return (
-    <div className="page">
+    <div className="page transfer-page">
       <PageTitle
         eyebrow="PORTABILITY"
         title="场景，随设备迁移"
@@ -66,16 +66,19 @@ export default function Transfer() {
           </button>
         }
       />
-      <section className="product-card">
+      <section className="product-card transfer-card">
         <h2>导入场景</h2>
-        <div className="product-actions">
-          <input
-            aria-label="导入文件路径"
-            value={importPath}
-            onChange={(e) => setImportPath(e.target.value)}
-            placeholder="粘贴 YAML 或 .launchflow 文件的完整路径"
-            style={{ flex: 1 }}
-          />
+        <p className="muted">选择文件或粘贴完整路径，校验后预览场景与本机资源映射。</p>
+        <div className="transfer-controls">
+          <label className="transfer-field">
+            导入文件路径
+            <input
+              value={importPath}
+              onChange={(e) => setImportPath(e.target.value)}
+              placeholder="粘贴 YAML 或 .launchflow 文件的完整路径"
+              spellCheck={false}
+            />
+          </label>
           <button
             className="button secondary"
             disabled={busy || !importPath.trim()}
@@ -85,37 +88,46 @@ export default function Transfer() {
           </button>
         </div>
       </section>
-      <section className="product-card">
+      <section className="product-card transfer-card">
         <h2>导出场景</h2>
-        <div className="product-actions">
-          <select
-            aria-label="导出场景"
-            value={sceneId}
-            onChange={(e) => setSceneId(e.target.value)}
-          >
-            <option value="">选择场景</option>
-            {data.scenes.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
-          <button
-            className="button secondary"
-            disabled={busy || !sceneId}
-            onClick={() => void exportScene(false)}
-          >
-            <Download size={16} />
-            导出 YAML
-          </button>
-          <button
-            className="button secondary"
-            disabled={busy || !sceneId}
-            onClick={() => void exportScene(true)}
-          >
-            <Download size={16} />
-            导出 .launchflow 包
-          </button>
+        <p className="muted">选择场景，导出为 YAML 文件或包含图片资产的完整包。</p>
+        <div className="transfer-controls">
+          <div className="transfer-field">
+            <label htmlFor="transfer-export-scene">导出场景</label>
+            <span className="transfer-select">
+              <select
+                id="transfer-export-scene"
+                value={sceneId}
+                onChange={(e) => setSceneId(e.target.value)}
+              >
+                <option value="">选择场景</option>
+                {data.scenes.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown size={16} aria-hidden="true" />
+            </span>
+          </div>
+          <div className="transfer-buttons">
+            <button
+              className="button secondary"
+              disabled={busy || !sceneId}
+              onClick={() => void exportScene(false)}
+            >
+              <Download size={16} />
+              导出 YAML
+            </button>
+            <button
+              className="button secondary"
+              disabled={busy || !sceneId}
+              onClick={() => void exportScene(true)}
+            >
+              <Download size={16} />
+              导出 .launchflow 包
+            </button>
+          </div>
         </div>
         <p className="muted">
           图片定位器建议使用完整包。YAML
@@ -173,22 +185,25 @@ export default function Transfer() {
                         )}
                         size={24}
                       />
-                      <select
-                        aria-label={`映射应用 ${b.label}`}
-                        value={mappings.applications[b.source] || b.target}
-                        onChange={(e) => mapping('applications', b.source, e.target.value)}
-                      >
-                        {!data.profiles.some((p) => p.id === b.target) && (
-                          <option value={b.target}>
-                            {b.found ? '使用包内路径' : '请选择本机应用'}
-                          </option>
-                        )}
-                        {data.profiles.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.displayName}
-                          </option>
-                        ))}
-                      </select>
+                      <span className="transfer-select">
+                        <select
+                          aria-label={`映射应用 ${b.label}`}
+                          value={mappings.applications[b.source] || b.target}
+                          onChange={(e) => mapping('applications', b.source, e.target.value)}
+                        >
+                          {!data.profiles.some((p) => p.id === b.target) && (
+                            <option value={b.target}>
+                              {b.found ? '使用包内路径' : '请选择本机应用'}
+                            </option>
+                          )}
+                          {data.profiles.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.displayName}
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown size={16} aria-hidden="true" />
+                      </span>
                     </span>
                   ) : b.kind === 'path' ? (
                     <input
@@ -233,8 +248,8 @@ export default function Transfer() {
               ? '此包包含命令或敏感 GUI 操作，请核对目标、参数和输入。'
               : '校验通过后才可导入。缺失应用可先在应用库添加，缺失凭据可在权限与凭据中创建。'}
           </p>
-          <div className="product-actions">
-            <label>
+          <div className="product-actions transfer-review">
+            <label className="checkbox-label">
               <input
                 type="checkbox"
                 checked={reviewed}
