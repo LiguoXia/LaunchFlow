@@ -137,6 +137,68 @@ impl Store {
         tx.commit()?;
         Ok(())
     }
+    pub fn rename_scene(&self, scene_id: &str, name: &str, expected_version: u32) -> Result<Scene> {
+        let name = name.trim();
+        if name.is_empty() || name.len() > 200 {
+            return Err(Error::Validation(
+                "场景名称不能为空或过长，请缩短后重试。".into(),
+            ));
+        }
+        crate::safety::check_storage_values(&name)?;
+        let mut conn = self.lock()?;
+        let tx = conn.transaction()?;
+        let (document, is_default): (String, bool) = tx
+            .query_row(
+                "SELECT document,is_default FROM scenes WHERE id=?1",
+                [scene_id],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .optional()?
+            .ok_or_else(|| Error::Validation("Scene not found".into()))?;
+        let mut scene: Scene = serde_json::from_str(&document)?;
+        scene.is_default = is_default;
+        if scene.version != expected_version {
+            return Err(Error::Validation("场景已更新，请刷新后重试改名。".into()));
+        }
+        if scene.name == name {
+            return Ok(scene);
+        }
+        scene.name = name.into();
+        scene.version += 1;
+        scene.updated_at = now();
+        let json = serde_json::to_string(&scene)?;
+        tx.execute(
+            "UPDATE scenes SET name=?2,version=?3,document=?4,updated_at=?5 WHERE id=?1",
+            params![scene.id, scene.name, scene.version, json, scene.updated_at],
+        )?;
+        tx.execute(
+            "INSERT INTO scene_versions(scene_id,version,document) VALUES(?1,?2,?3)",
+            params![scene.id, scene.version, json],
+        )?;
+        let draft: Option<String> = tx
+            .query_row(
+                "SELECT document FROM drafts WHERE scene_id=?1",
+                [scene_id],
+                |r| r.get(0),
+            )
+            .optional()?;
+        if let Some(document) = draft {
+            let mut draft: Scene = serde_json::from_str(&document)?;
+            // Preserve unfinished workflow edits while moving their base revision forward.
+            // An already stale draft stays stale so the editor can detect that conflict.
+            if draft.version == expected_version {
+                draft.name = scene.name.clone();
+                draft.version = scene.version;
+                draft.updated_at = scene.updated_at.clone();
+                tx.execute(
+                    "UPDATE drafts SET document=?2 WHERE scene_id=?1",
+                    params![scene_id, serde_json::to_string(&draft)?],
+                )?;
+            }
+        }
+        tx.commit()?;
+        Ok(scene)
+    }
     pub fn delete_scene(&self, id: &str) -> Result<()> {
         self.lock()?
             .execute("DELETE FROM scenes WHERE id=?1", [id])?;
@@ -392,6 +454,85 @@ mod tests {
         );
         assert!(store.set_default(Some("missing")).is_err());
         assert!(store.scene(&b.id).unwrap().is_default);
+    }
+    #[test]
+    fn rename_preserves_workflow_default_draft_and_run_snapshot() {
+        let store = Store::memory().unwrap();
+        let mut original = Scene::new("Old");
+        original.workflow.nodes.push(Node::new(
+            "system.delay",
+            "Saved step",
+            serde_json::json!({"durationMs":1}),
+        ));
+        let original = store.save_scene(original).unwrap();
+        store.set_default(Some(&original.id)).unwrap();
+        let mut draft = original.clone();
+        draft.workflow.nodes[0].name = "Unfinished edit".into();
+        store.save_draft(&draft).unwrap();
+        let run = Run::new(original.clone(), "manual");
+        store.save_run(&run).unwrap();
+        let renamed = store
+            .rename_scene(&original.id, "  New name  ", original.version)
+            .unwrap();
+        assert_eq!(renamed.name, "New name");
+        assert_eq!(renamed.version, original.version + 1);
+        assert_eq!(renamed.created_at, original.created_at);
+        assert!(renamed.is_default);
+        assert_eq!(renamed.workflow.nodes[0].name, "Saved step");
+        let recovered = store.draft(&original.id).unwrap().unwrap();
+        assert_eq!(recovered.name, renamed.name);
+        assert_eq!(recovered.version, renamed.version);
+        assert_eq!(recovered.workflow.nodes[0].name, "Unfinished edit");
+        assert_eq!(store.run(&run.id).unwrap().scene_snapshot.name, "Old");
+        assert_eq!(
+            store
+                .lock()
+                .unwrap()
+                .query_row(
+                    "SELECT COUNT(*) FROM scene_versions WHERE scene_id=?1",
+                    [&original.id],
+                    |r| r.get::<_, u32>(0)
+                )
+                .unwrap(),
+            2
+        );
+        assert_eq!(
+            store
+                .rename_scene(&original.id, "New name", renamed.version)
+                .unwrap()
+                .version,
+            renamed.version
+        );
+    }
+    #[test]
+    fn rename_rejects_stale_and_invalid_names_without_changing_data() {
+        let store = Store::memory().unwrap();
+        let original = store.save_scene(Scene::new("Old")).unwrap();
+        store.save_draft(&original).unwrap();
+        for name in [
+            " ".to_string(),
+            "中".repeat(67),
+            "password=literal".to_string(),
+        ] {
+            assert!(store
+                .rename_scene(&original.id, &name, original.version)
+                .is_err());
+        }
+        assert!(store.rename_scene("missing", "New", 1).is_err());
+        assert!(store.rename_scene(&original.id, "New", 0).is_err());
+        assert_eq!(store.scene(&original.id).unwrap().name, "Old");
+        assert_eq!(store.draft(&original.id).unwrap().unwrap().name, "Old");
+        // A genuinely old draft must not become valid after a metadata rename.
+        let current = store.save_scene(original.clone()).unwrap();
+        store.save_draft(&original).unwrap();
+        let renamed = store
+            .rename_scene(&original.id, "New", current.version)
+            .unwrap();
+        assert_eq!(
+            store.draft(&original.id).unwrap().unwrap().version,
+            original.version
+        );
+        assert_eq!(renamed.version, current.version + 1);
     }
     #[test]
     fn versions_conflicts_and_drafts() {

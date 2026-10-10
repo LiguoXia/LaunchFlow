@@ -12,6 +12,7 @@ pub mod rebind;
 pub mod registry;
 pub mod safety;
 pub mod storage;
+pub mod templates;
 pub mod triggers;
 pub mod validation;
 pub mod vault;

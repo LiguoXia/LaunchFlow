@@ -1800,6 +1800,17 @@ h1 {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.editor-name {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.editor-name h1 {
+  min-width: 0;
+}
+.editor-name .icon-button {
+  flex: none;
+}
 .editor-title > span {
   display: flex;
   align-items: center;
@@ -1943,6 +1954,27 @@ h1 {
   display: flex;
   flex-direction: column;
   align-items: center;
+  position: relative;
+}
+.sequence-end {
+  position: relative;
+}
+.sequence-step.drop-before:before,
+.sequence-end.drop-before:before {
+  content: '';
+  position: absolute;
+  top: 10px;
+  width: min(100%, 370px);
+  height: 3px;
+  border-radius: 3px;
+  background: var(--accent);
+  pointer-events: none;
+}
+.sequence-step.dragging .node-card {
+  opacity: 0.45;
+}
+.sequence-step.dragging .node-card-header {
+  cursor: grabbing;
 }
 .sequence-line {
   height: 24px;
@@ -2451,4 +2483,34 @@ html[data-theme='dark'] .error-panel {
   font-family: Consolas, monospace;
   font-size: 12px;
   white-space: pre;
+}
+/* Built-in templates remain available after deleting an installed example. */
+.template-banner {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 20px 24px;
+  margin-bottom: 24px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+}
+.template-banner > svg {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.template-banner > div {
+  flex: 1;
+}
+.template-banner p {
+  margin: 6px 0 0;
+  color: var(--subtle);
+  font-size: 13px;
+}
+.template-preview p,
+.template-preview li {
+  line-height: 1.75;
+}
+.template-preview li {
+  margin: 10px 0;
 }

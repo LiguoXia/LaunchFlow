@@ -40,7 +40,7 @@ namespace LaunchFlow.Native
         public void Reset() { identity = ""; previous = ""; armed = false; suppressed = false; lastElement = null; }
         AutomationElement Focused()
         {
-            if (Win.GetForegroundWindow() != window) return null;
+            if (!WindowFocus.IsForeground(window)) return null;
             var element = AutomationElement.FocusedElement;
             return element != null && Desktop.ElementWindow(element) == window ? element : null;
         }

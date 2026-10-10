@@ -125,10 +125,20 @@ public static Dictionary<string, object> Locator(Dictionary<string, object> elem
         if (input) value["name"] = "";
         return value;
     }).ToArray();
-    return Wire.Obj("kind", "accessibility", "window", window, "role", Wire.Str(element, "role"), "name",
+    var locator = Wire.Obj("kind", "accessibility", "window", window, "role", Wire.Str(element, "role"), "name",
                     input ? "" : Wire.Str(element, "name"), "automationId", Wire.Str(element, "automationId"), "className",
                     Wire.Str(element, "className"), "frameworkId", Wire.Str(element, "frameworkId"), "ancestorPath",
                     ancestors);
+    if (Wire.Bool(element, "secure")) {
+        locator["secure"] = true;
+        // Chromium can expose a temporary Win32 password edit while focused.
+        // Persist the secure field identity rather than that proxy's implementation.
+        if (Desktop.IsChromiumPasswordProxy(locator)) {
+            locator["className"] = "";
+            locator["frameworkId"] = "";
+        }
+    }
+    return locator;
 }
 public static void Run(Dictionary<string, object> request)
 {
@@ -343,7 +353,7 @@ static void Session(Dictionary<string, object> request)
                 host.BeginInvoke(stop);
                 return new IntPtr(1);
             }
-            if (!picking && !paused && Win.GetForegroundWindow() == target)
+            if (!picking && !paused && WindowFocus.IsForeground(target))
             {
                 bool ctrl = Win.GetAsyncKeyState(17) < 0, alt = Win.GetAsyncKeyState(18) < 0,
                      shift = Win.GetAsyncKeyState(16) < 0;

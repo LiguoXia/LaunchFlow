@@ -48,7 +48,15 @@ const navigation = [
 ] as const;
 export default function App() {
   const [data, setData] = useState<Bootstrap | null>(null);
-  const [page, setPage] = useState<Page>('home');
+  const [page, setCurrentPage] = useState<Page>('home');
+  const editorLeave = useRef<(() => Promise<boolean>) | null>(null);
+  const leavingEditor = useRef(false);
+  const registerEditorLeave = useCallback((handler: () => Promise<boolean>) => {
+    editorLeave.current = handler;
+    return () => {
+      if (editorLeave.current === handler) editorLeave.current = null;
+    };
+  }, []);
   const [selectedScene, setSelectedScene] = useState<Scene | null>(null);
   const [selectedRun, setSelectedRun] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -75,6 +83,23 @@ export default function App() {
     setToast({ text, error });
     toastTimer.current = setTimeout(() => setToast(null), error ? 12000 : 4000);
   }, []);
+  const setPage = (destination: Page) => {
+    if (leavingEditor.current) return;
+    if (page !== 'editor' || destination === 'editor' || !editorLeave.current) {
+      setCurrentPage(destination);
+      return;
+    }
+    leavingEditor.current = true;
+    void editorLeave
+      .current()
+      .then((ready) => {
+        if (ready) setCurrentPage(destination);
+      })
+      .catch((error) => notify(String(error), true))
+      .finally(() => {
+        leavingEditor.current = false;
+      });
+  };
   const refresh = useCallback((): Promise<void> => {
     // A caller after a write needs a snapshot fetched after that write. An older
     // in-flight bootstrap cannot satisfy it, even when the requests overlap.
@@ -139,6 +164,22 @@ export default function App() {
       setPendingDefault(undefined);
     }
   }, []);
+  const renameScene = async (scene: Scene, name: string) => {
+    const saved = await api.renameScene(scene.id, name, scene.version);
+    defaultRevision.current++;
+    setData((current) =>
+      current
+        ? {
+            ...current,
+            scenes: current.scenes.map((s) => (s.id === saved.id ? saved : s)),
+          }
+        : current,
+    );
+    setSelectedScene((current) => (current?.id === saved.id ? saved : current));
+    // A refresh error must not turn an already committed rename into a stale-version retry.
+    void refresh().catch((error) => notify(String(error), true));
+    return saved;
+  };
   useEffect(() => {
     if (!desktopAvailable) return;
     let active = true;
@@ -312,7 +353,7 @@ export default function App() {
           </button>
           <div className="sidebar-footer">
             <span>LOCAL FIRST</span>
-            <span>v{data?.version || '0.4.13'}</span>
+            <span>v{data?.version || '0.4.15'}</span>
           </div>
         </div>
       </aside>
@@ -399,6 +440,8 @@ export default function App() {
               setSelectedRun,
               refresh,
               setDefaultScene,
+              renameScene,
+              registerEditorLeave,
               perform,
               edit,
               run,

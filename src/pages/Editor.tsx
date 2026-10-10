@@ -12,6 +12,7 @@ import {
   GripVertical,
   Info,
   Play,
+  PencilLine,
   Plus,
   Redo2,
   Save,
@@ -26,6 +27,7 @@ import ApplicationIcon from '../components/ApplicationIcon';
 import WorkflowNodeIcon from '../components/WorkflowNodeIcon';
 import {
   createNode,
+  dropNode,
   duplicateNode,
   moveNode,
   removeNode,
@@ -38,9 +40,20 @@ import { useWorkspace } from '../lib/workspace';
 const AdvancedCanvas = lazy(() => import('../components/AdvancedCanvas'));
 import SceneAdvancedSettings, { JsonInput } from '../components/SceneAdvancedSettings';
 import { isSequence, sequenceNodes } from '../domain/graph';
+import SceneNameDialog from '../components/SceneNameDialog';
 
 export default function Editor() {
-  const { data, selectedScene, setPage, edit, run, refresh, notify } = useWorkspace();
+  const {
+    data,
+    selectedScene,
+    setPage,
+    edit,
+    run,
+    refresh,
+    notify,
+    renameScene,
+    registerEditorLeave,
+  } = useWorkspace();
   const [draft, setDraft] = useState<Scene | null>(selectedScene);
   const [loaded, setLoaded] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
@@ -48,8 +61,11 @@ export default function Editor() {
   const [advanced, setAdvanced] = useState(false);
   const [saveStatus, setSaveStatus] = useState('已保存');
   const [saving, setSaving] = useState(false);
+  const [dragging, setDragging] = useState<string | null>(null);
+  const [dropGap, setDropGap] = useState<number | null>(null);
   const [issues, setIssues] = useState<ValidationIssue[]>([]);
   const [showSceneSettings, setShowSceneSettings] = useState(false);
+  const [renaming, setRenaming] = useState(false);
   const [history, setHistory] = useState<{ past: Scene[]; future: Scene[] }>({
     past: [],
     future: [],
@@ -58,6 +74,7 @@ export default function Editor() {
   const dirty = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const writes = useRef<Promise<void>>(Promise.resolve());
+  const synchronizing = useRef(false);
   const persist = (scene: Scene) => {
     writes.current = writes.current.catch(() => {}).then(() => api.saveDraft(scene));
     return writes.current;
@@ -116,6 +133,7 @@ export default function Editor() {
     };
   }, [draft, loaded, notify]);
   const change = (scene: Scene, track = true) => {
+    if (synchronizing.current) return;
     scene = { ...scene, version: latest.current?.version ?? scene.version };
     if (track && latest.current) {
       const previous = structuredClone(latest.current);
@@ -135,6 +153,39 @@ export default function Editor() {
         });
     }, 700);
   };
+  useEffect(() =>
+    registerEditorLeave(async () => {
+      if (!latest.current) return true;
+      if (!loaded || (saving && dirty.current) || synchronizing.current) return false;
+      synchronizing.current = true;
+      setSaving(true);
+      clearTimeout(timer.current);
+      try {
+        if (dirty.current) await persist(latest.current);
+        else await writes.current;
+        if (latest.current.name !== selectedScene?.name) {
+          const saved = await renameScene(latest.current, latest.current.name);
+          // Rename commits metadata only. Keep unfinished steps in a current-version draft.
+          latest.current = {
+            ...latest.current,
+            name: saved.name,
+            version: saved.version,
+            updatedAt: saved.updatedAt,
+          };
+          setDraft(latest.current);
+          await persist(latest.current);
+        }
+        return true;
+      } catch (error) {
+        setSaveStatus('名称同步失败 · 草稿保留');
+        notify(`无法同步场景名称：${String(error)}`, true);
+        return false;
+      } finally {
+        synchronizing.current = false;
+        setSaving(false);
+      }
+    }),
+  );
   const undo = () => {
     if (history.past.length && draft) {
       const previous = history.past[history.past.length - 1];
@@ -223,6 +274,15 @@ export default function Editor() {
     setShowSceneSettings(false);
   };
   const nodeErrors = node ? validateNode(node, definition) : [];
+  const drop = (event: React.DragEvent, gap: number) => {
+    event.preventDefault();
+    const id = dragging ?? event.dataTransfer.getData('text/launchflow-node');
+    setDragging(null);
+    setDropGap(null);
+    if (saving || !loaded || !id) return;
+    const next = dropNode(draft, id, gap);
+    if (next !== draft) change(next);
+  };
   return (
     <div className="editor-page">
       <div className="editor-heading">
@@ -230,7 +290,18 @@ export default function Editor() {
           <ArrowLeft size={19} />
         </button>
         <div className="editor-title">
-          <h1>{draft.name}</h1>
+          <div className="editor-name">
+            <h1>{draft.name}</h1>
+            <button
+              className="icon-button"
+              title="重命名场景"
+              aria-label="重命名场景"
+              disabled={saving || !loaded}
+              onClick={() => setRenaming(true)}
+            >
+              <PencilLine size={15} />
+            </button>
+          </div>
           <span>
             <span className="live-dot" />
             {saveStatus} · v{draft.version}
@@ -271,6 +342,16 @@ export default function Editor() {
         </button>
       </div>
       <AutomationToolbar scene={draft} onChange={change} />
+      {renaming && (
+        <SceneNameDialog
+          name={draft.name}
+          onClose={() => setRenaming(false)}
+          onSave={async (name) => {
+            change({ ...draft, name });
+            notify('名称已更新到草稿，保存场景后生效');
+          }}
+        />
+      )}
       <div className="editor-workspace">
         <aside className="node-palette">
           <div className="palette-heading">
@@ -352,7 +433,7 @@ export default function Editor() {
         ) : (
           <section className="sequence-canvas">
             <div className="canvas-toolbar">
-              <span>{draft.workflow.nodes.length} 个步骤 · 顺序执行</span>
+              <span>{draft.workflow.nodes.length} 个步骤 · 顺序执行 · 拖动卡片调整顺序</span>
               <div>
                 <button
                   className="icon-button"
@@ -407,14 +488,16 @@ export default function Editor() {
             )}
             {sequenceNodes(draft).map((n, index) => (
               <div
-                className="sequence-step"
+                className={`sequence-step ${dropGap === index ? 'drop-before' : ''} ${dragging === n.id ? 'dragging' : ''}`}
                 key={n.id}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => {
+                onDragOver={(e) => {
+                  if (!dragging || saving || !loaded) return;
                   e.preventDefault();
-                  if (!saving)
-                    change(moveNode(draft, e.dataTransfer.getData('text/launchflow-node'), index));
+                  e.dataTransfer.dropEffect = 'move';
+                  const card = e.currentTarget.querySelector('.node-card')!.getBoundingClientRect();
+                  setDropGap(index + (e.clientY > card.top + card.height / 2 ? 1 : 0));
                 }}
+                onDrop={(e) => drop(e, dropGap ?? index)}
               >
                 <div className="sequence-line" />
                 <div
@@ -435,8 +518,17 @@ export default function Editor() {
                 >
                   <div
                     className="node-card-header"
-                    draggable={!saving}
-                    onDragStart={(e) => e.dataTransfer.setData('text/launchflow-node', n.id)}
+                    draggable={!saving && loaded}
+                    title="拖动调整步骤顺序"
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData('text/launchflow-node', n.id);
+                      e.dataTransfer.effectAllowed = 'move';
+                      setDragging(n.id);
+                    }}
+                    onDragEnd={() => {
+                      setDragging(null);
+                      setDropGap(null);
+                    }}
                   >
                     <GripVertical size={15} className="grip" />
                     <span className={`node-symbol ${n.type.split('.')[0]}`}>
@@ -525,7 +617,16 @@ export default function Editor() {
               </div>
             ))}
             {draft.workflow.nodes.length > 0 && (
-              <div className="sequence-end">
+              <div
+                className={`sequence-end ${dropGap === draft.workflow.nodes.length ? 'drop-before' : ''}`}
+                onDragOver={(e) => {
+                  if (!dragging || saving || !loaded) return;
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = 'move';
+                  setDropGap(draft.workflow.nodes.length);
+                }}
+                onDrop={(e) => drop(e, draft.workflow.nodes.length)}
+              >
                 <div className="sequence-line" />
                 <span>
                   <Check size={14} />

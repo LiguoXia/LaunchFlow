@@ -10,6 +10,8 @@ export interface Workspace {
   setSelectedRun: (id: string | null) => void;
   refresh: () => Promise<void>;
   setDefaultScene: (sceneId: string | null) => Promise<void>;
+  renameScene: (scene: Scene, name: string) => Promise<Scene>;
+  registerEditorLeave: (handler: () => Promise<boolean>) => () => void;
   perform: <T>(fn: () => Promise<T>) => Promise<T | undefined>;
   edit: (scene: Scene) => void;
   run: (scene: Scene) => Promise<Run | undefined>;

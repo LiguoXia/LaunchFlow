@@ -43,6 +43,8 @@ for (const name of [
   'RECORDED-CLICK-FIX.md',
   'STARTUP-TEXT-FIX.md',
   'IN-APP-AUTOLOGON.md',
+  'QQ-SECRET-AND-SCENE-EDITOR.md',
+  'SCENE-SYNC-AND-TEMPLATE.md',
 ])
   await copyFile(join('docs', name), join(directory, name));
 const quote = (s) => "'" + s.replaceAll("'", "''") + "'";

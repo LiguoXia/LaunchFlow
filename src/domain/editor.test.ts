@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   createNode,
+  dropNode,
   duplicateNode,
   mergeRun,
   moveNode,
@@ -37,6 +38,21 @@ function scene(): Scene {
   };
 }
 describe('sequence editor', () => {
+  it('drops at insertion gaps in both directions and ignores no-op or foreign drops', () => {
+    const a = createNode(delay),
+      b = createNode(delay),
+      c = createNode(delay);
+    const initial = withSequence(scene(), [a, b, c]);
+    expect(dropNode(initial, a.id, 3).workflow.nodes.map((n) => n.id)).toEqual([b.id, c.id, a.id]);
+    expect(dropNode(initial, c.id, 1).workflow.nodes.map((n) => n.id)).toEqual([a.id, c.id, b.id]);
+    expect(dropNode(initial, b.id, 1)).toBe(initial);
+    expect(dropNode(initial, b.id, 2)).toBe(initial);
+    expect(dropNode(initial, 'foreign', 0)).toBe(initial);
+    expect(dropNode(initial, a.id, -1)).toBe(initial);
+    expect(dropNode(initial, a.id, 4)).toBe(initial);
+    const branched = { ...initial, workflow: { ...initial.workflow, edges: [] } };
+    expect(dropNode(branched, a.id, 2)).toBe(branched);
+  });
   it('keeps dependency edges in sync when reordered, duplicated and deleted', () => {
     const a = createNode(delay),
       b = createNode(delay),

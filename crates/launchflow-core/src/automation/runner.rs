@@ -258,7 +258,8 @@ impl NodeRunner for GuiRunner {
                         .map_err(|_| Error::Runtime("Desktop input service unavailable".into()))?,
                 )
             };
-            match resolve(provider.as_ref(), &c.locators, &ctx.diagnostics).await {
+            match resolve_action(provider.as_ref(), &c.locators, &ctx.diagnostics, self.kind).await
+            {
                 Ok(target) => {
                     if self.kind == "waitElementDisappear" {
                         drop(guard);
@@ -388,12 +389,20 @@ pub async fn resolve(
     locators: &[Locator],
     diagnostics: &std::sync::Mutex<Diagnostic>,
 ) -> AutomationResult<ResolvedTarget> {
+    resolve_action(provider, locators, diagnostics, "highlight").await
+}
+pub async fn resolve_action(
+    provider: &dyn AutomationProvider,
+    locators: &[Locator],
+    diagnostics: &std::sync::Mutex<Diagnostic>,
+    kind: &str,
+) -> AutomationResult<ResolvedTarget> {
     let mut ordered: Vec<_> = locators.iter().enumerate().collect();
     ordered.sort_by_key(|(_, l)| l.priority());
     let mut final_error = AutomationError::new("notFound", "No locator matched");
     for (index, locator) in ordered {
         let started = Instant::now();
-        let result = resolve_one(provider, locator).await;
+        let result = resolve_one(provider, locator, kind == "inputSecret").await;
         let attempt = LocatorAttempt {
             index,
             kind: locator.kind().into(),
@@ -438,6 +447,7 @@ pub async fn resolve(
 async fn resolve_one(
     provider: &dyn AutomationProvider,
     locator: &Locator,
+    secure_input: bool,
 ) -> AutomationResult<ResolvedTarget> {
     let window = locator.window().clone();
     let mut native_locator = Value::Null;
@@ -446,7 +456,9 @@ async fn resolve_one(
         Locator::Accessibility { .. } | Locator::Text { ocr: false, .. } => {
             let value = serde_json::to_value(locator).unwrap();
             let e = provider
-                .request(json!({"op":"find","window":window,"locator":value}))
+                .request(
+                    json!({"op":"find","window":window,"locator":value,"secureInput":secure_input}),
+                )
                 .await?;
             native_locator = value;
             native_locator["runtimeId"] = e["runtimeId"].clone();

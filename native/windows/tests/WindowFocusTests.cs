@@ -8,10 +8,12 @@ class FakeFocus : FocusDesktop
     public long ActivatedAt = 400, RestoredAt = 0, DisappearedAt = long.MaxValue;
     public bool Accepted = true;
     public IntPtr Current = new IntPtr(22);
+    public IntPtr CurrentRoot;
     public override long Milliseconds { get { return Now; } }
     public override bool Exists(IntPtr h) { return Now < DisappearedAt; }
     public override bool Minimized(IntPtr h) { return Now < RestoredAt; }
     public override IntPtr Foreground() { return Now >= ActivatedAt ? new IntPtr(11) : Current; }
+    public override IntPtr Root(IntPtr h) { return h == Current ? CurrentRoot : h; }
     public override void Restore(IntPtr h) { Restores++; }
     public override bool Request(IntPtr h) { Requests++; return Accepted; }
     public override void Pause() { Now += 25; }
@@ -48,6 +50,13 @@ class WindowFocusTests
         d = new FakeFocus { ActivatedAt = 0 };
         WindowFocus.BeforeInput(Target, d);
         Check(d.Requests == 0, "Exact foreground window permits input");
+        d = new FakeFocus { ActivatedAt = long.MaxValue, Current = new IntPtr(33), CurrentRoot = Target };
+        WindowFocus.Activate(Target, d);
+        WindowFocus.BeforeInput(Target, d);
+        Check(d.Requests == 0 && d.Now == 0, "A foreground password proxy rooted in the target preserves keyboard focus");
+        d = new FakeFocus { ActivatedAt = long.MaxValue, Current = new IntPtr(33), CurrentRoot = new IntPtr(44) };
+        failure = Failure(() => WindowFocus.BeforeInput(Target, d));
+        Check(failure.Code == "focusDenied", "Another window's foreground child cannot authorize target input");
         d = new FakeFocus { RestoredAt = long.MaxValue, ActivatedAt = long.MaxValue };
         failure = Failure(() => WindowFocus.Activate(Target, d));
         Check(failure.Code == "focusDenied" && d.Now == 2000 && d.Requests == 0 && d.Restores == 1, "Unresponsive minimized window cannot block worker indefinitely");

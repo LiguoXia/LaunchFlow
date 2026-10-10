@@ -49,7 +49,7 @@ namespace LaunchFlow.Native
                             Win.IsIconic(h)   ? "minimized"
                             : Win.IsZoomed(h) ? "maximized"
                                               : "normal",
-                            "focused", Win.GetForegroundWindow() == h);
+                            "focused", WindowFocus.IsForeground(h));
         }
         public static bool WindowMatches(IntPtr h, Dictionary<string, object> scope)
         {
@@ -124,12 +124,12 @@ namespace LaunchFlow.Native
             d["ancestorPath"] = path;
             return d;
         }
-        public static IEnumerable<AutomationElement> Elements(AutomationElement root)
+        public static IEnumerable<AutomationElement> Elements(AutomationElement root, bool raw = false)
         {
             var queue = new Queue<Tuple<AutomationElement, int>>();
             queue.Enqueue(Tuple.Create(root, 0));
             int count = 0;
-            var walker = TreeWalker.ControlViewWalker;
+            var walker = raw ? TreeWalker.RawViewWalker : TreeWalker.ControlViewWalker;
             while (queue.Count > 0 && count++ < 2048)
             {
                 var item = queue.Dequeue();
@@ -161,6 +161,7 @@ namespace LaunchFlow.Native
         public static bool Match(AutomationElement e, Dictionary<string, object> attrs)
         {
             var actual = Attributes(e);
+            if (Wire.Bool(attrs, "secure") && !Wire.Bool(actual, "secure")) return false;
             foreach (var key in new[] { "role", "name", "automationId", "className", "frameworkId" })
             {
                 var wanted = Wire.Str(attrs, key);
@@ -185,26 +186,67 @@ namespace LaunchFlow.Native
             }
             return true;
         }
-        public static AutomationElement FindElement(IntPtr window, Dictionary<string, object> locator)
+        public static bool IsChromiumPasswordProxy(Dictionary<string, object> locator)
+        {
+            return Wire.Str(locator, "role") == "Edit" && Wire.Str(locator, "automationId") == "" &&
+                Wire.Str(locator, "className") == "Edit" && Wire.Str(locator, "frameworkId") == "Win32" &&
+                Wire.Str(Wire.Map(Wire.Get(locator, "window")), "className").StartsWith("Chrome_WidgetWin_", StringComparison.Ordinal);
+        }
+        public static AutomationElement FindElement(IntPtr window, Dictionary<string, object> locator, bool secureInput = false)
+        {
+            if (secureInput) {
+                locator = new Dictionary<string, object>(locator);
+                locator["secure"] = true;
+                // Compatibility with recordings made before secure locators were stored.
+                if (IsChromiumPasswordProxy(locator)) {
+                    locator["className"] = "";
+                    locator["frameworkId"] = "";
+                }
+            }
+            var started = Stopwatch.StartNew();
+            while (true) {
+                try { return FindElementOnce(window, locator, secureInput || Wire.Bool(locator, "secure")); }
+                catch (NativeFailure failure) {
+                    // The password provider may appear shortly after the preceding click.
+                    if (!secureInput || failure.Code != "notFound" || started.ElapsedMilliseconds >= 1500) throw;
+                    System.Threading.Thread.Sleep(100);
+                }
+            }
+        }
+        static AutomationElement FindElementOnce(IntPtr window, Dictionary<string, object> locator, bool secureInput)
         {
             var root = AutomationElement.FromHandle(window);
             var runtime = Wire.List(Wire.Get(locator, "runtimeId")).Select(Convert.ToInt32).ToArray();
             string kind = Wire.Str(locator, "kind", "accessibility"), text = Wire.Str(locator, "text");
             var results = new List<AutomationElement>();
-            foreach (var e in Elements(root))
+            var candidates = Elements(root);
+            if (secureInput) {
+                // Focus-only and raw-view password providers need not be in ControlView.
+                var focused = AutomationElement.FocusedElement;
+                candidates = candidates.Concat(Elements(root, true));
+                if (focused != null && ElementWindow(focused) == window) candidates = candidates.Concat(new[] { focused });
+            }
+            var seen = new HashSet<string>();
+            foreach (var e in candidates)
             {
                 try
                 {
+                    if (!seen.Add(String.Join(",", e.GetRuntimeId()))) continue;
+                    if (secureInput && (!e.Current.IsPassword || !RecordedText.IsInput(e) || ElementWindow(e) != window)) continue;
+                    // QQ's focused password proxy reports IsOffscreen=true even while
+                    // receiving keyboard input. Only accept it with verified window focus.
+                    bool available = !e.Current.IsOffscreen || secureInput &&
+                        WindowFocus.IsForeground(window) && RecordedText.HasFocus(e);
                     if (runtime.Length > 0)
                     {
-                        if (!e.Current.IsOffscreen && e.GetRuntimeId().SequenceEqual(runtime) && Match(e, locator) &&
+                        if (available && e.GetRuntimeId().SequenceEqual(runtime) && Match(e, locator) &&
                             (kind != "text" || String.Equals(e.Current.IsPassword ? "" : e.Current.Name, text,
                                                            StringComparison.OrdinalIgnoreCase)) &&
                             MatchAncestors(e, Wire.Get(locator, "ancestorPath")))
                             return e;
                         continue;
                     }
-                    if (e.Current.IsOffscreen)
+                    if (!available)
                         continue;
                     bool matches = kind == "text"
                                        ? String.Equals(e.Current.IsPassword ? "" : e.Current.Name, text,
@@ -348,7 +390,10 @@ namespace LaunchFlow.Native
                 }
                 WindowFocus.BeforeInput(window);
                 var pattern = Pattern(e, ValuePattern.Pattern) as ValuePattern;
-                if (pattern != null && !pattern.Current.IsReadOnly)
+                bool passwordProxy = secure && IsChromiumPasswordProxy(Info(e, window, false));
+                // SetValue on Chromium's native proxy can update the hidden edit without
+                // delivering the input events to the real login form.
+                if (!passwordProxy && pattern != null && !pattern.Current.IsReadOnly)
                 {
                     try {
                         pattern.SetValue(value);
@@ -510,7 +555,11 @@ namespace LaunchFlow.Native
                     g.ReleaseHdc(dc);
                     if (!ok)
                         throw new NativeFailure("captureFailed", "Window capture failed.");
-                    foreach (var e in Elements(AutomationElement.FromHandle(window)))
+                    var root = AutomationElement.FromHandle(window);
+                    var fields = Elements(root).Concat(Elements(root, true));
+                    var focused = AutomationElement.FocusedElement;
+                    if (focused != null && ElementWindow(focused) == window) fields = fields.Concat(new[] { focused });
+                    foreach (var e in fields)
                     {
                         try
                         {
@@ -583,7 +632,9 @@ namespace LaunchFlow.Native
                 var capture = Capture(window, Wire.Str(request, "path"), Wire.Map(Wire.Get(request, "region")));
                 return Ocr.Recognize(Wire.Str(request, "path"), Wire.Map(capture["bounds"]));
             }
-            var target = locator.Count > 0 ? FindElement(window, locator) : null;
+            var target = locator.Count > 0 ? FindElement(window, locator,
+                Wire.Bool(request, "secureInput") ||
+                op == "perform" && Wire.Str(Wire.Map(Wire.Get(request, "action")), "kind") == "inputSecret") : null;
             if (op == "find")
                 return Info(target ?? AutomationElement.FromHandle(window), window);
             if (op == "perform")

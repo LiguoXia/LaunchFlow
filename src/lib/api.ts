@@ -67,7 +67,10 @@ export const api = {
   bootstrap: () => invoke<Bootstrap>('bootstrap'),
   diagnosticLog: (runId?: string) => invoke<string>('diagnostic_log', { runId: runId ?? null }),
   createScene: (name: string) => invoke<Scene>('create_scene', { name }),
+  loadWindowsDemo: () => invoke<Scene[]>('load_windows_demo'),
   saveScene: (scene: Scene) => invoke<Scene>('save_scene', { scene }),
+  renameScene: (sceneId: string, name: string, expectedVersion: number) =>
+    invoke<Scene>('rename_scene', { sceneId, name, expectedVersion }),
   duplicateScene: (sceneId: string) => invoke<Scene>('duplicate_scene', { sceneId }),
   deleteScene: (sceneId: string) => invoke<void>('delete_scene', { sceneId }),
   setDefault: (sceneId: string | null) => invoke<string | null>('set_default_scene', { sceneId }),

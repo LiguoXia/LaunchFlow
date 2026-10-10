@@ -1,5 +1,5 @@
 import type { NodeDefinition, Run, Scene, WorkflowNode } from './types';
-import { sequenceNodes } from './graph';
+import { isSequence, sequenceNodes } from './graph';
 
 export function createNode(definition: NodeDefinition): WorkflowNode {
   return {
@@ -37,10 +37,17 @@ export function withSequence(scene: Scene, nodes: WorkflowNode[]): Scene {
 export function moveNode(scene: Scene, id: string, index: number): Scene {
   const nodes = [...sequenceNodes(scene)];
   const previous = nodes.findIndex((n) => n.id === id);
-  if (previous < 0 || index < 0 || index >= nodes.length) return scene;
+  if (previous < 0 || index < 0 || index >= nodes.length || previous === index) return scene;
   const [node] = nodes.splice(previous, 1);
   nodes.splice(index, 0, node);
   return withSequence(scene, nodes);
+}
+export function dropNode(scene: Scene, id: string, gap: number): Scene {
+  const nodes = sequenceNodes(scene);
+  const previous = nodes.findIndex((n) => n.id === id);
+  if (!isSequence(scene) || previous < 0 || !Number.isInteger(gap) || gap < 0 || gap > nodes.length)
+    return scene;
+  return moveNode(scene, id, gap > previous ? gap - 1 : gap);
 }
 export function duplicateNode(scene: Scene, id: string): Scene {
   const nodes = [...sequenceNodes(scene)];

@@ -38,14 +38,21 @@ namespace LaunchFlow.Native
             AutomationProperties.SetName(result, text);
         }
         [STAThread]
-        public static void Main()
+        public static void Main(string[] args)
         {
             Win.SetProcessDpiAwarenessContext(new IntPtr(-4));
+            if (args.Length > 0 && args[0] == "--tutorial") Tutorial.Start(args);
             var app = new Application();
-            var window = Identify(new Window { Title = "LaunchFlow Automation Test Harness", Width = 800, Height = 760,
+            string title = Tutorial.Active ? Tutorial.Title : "LaunchFlow Automation Test Harness";
+            var window = Identify(new Window { Title = title, Width = 800, Height = 760,
                                                Left = 140, Top = 100,
                                                Background = new SolidColorBrush(Color.FromRgb(242, 247, 245)) },
-                                  "test-window", "LaunchFlow Automation Test Harness");
+                                  "test-window", title);
+            if (Tutorial.Active) {
+                window.MaxHeight = SystemParameters.WorkArea.Height;
+                window.WindowStartupLocation = WindowStartupLocation.CenterScreen;
+                Tutorial.Attach(window);
+            }
             var dock = new DockPanel();
             window.Content = dock;
             var menu = Identify(new Menu(), "menu", "Harness Menu");
@@ -57,7 +64,7 @@ namespace LaunchFlow.Native
             file.Items.Add(dialog);
             dialog.Click += delegate
             {
-                var d = new Window { Title = "Harness Dialog", Owner = window, Width = 300, Height = 170,
+                var d = new Window { Title = Tutorial.Active ? title + " · Dialog" : "Harness Dialog", Owner = window, Width = 300, Height = 170,
                                      WindowStartupLocation = WindowStartupLocation.CenterOwner };
                 var close = Identify(new Button { Content = "Confirm Dialog", Margin = new Thickness(20) },
                                      "confirm-dialog", "Confirm Dialog");
@@ -74,7 +81,7 @@ namespace LaunchFlow.Native
             dock.Children.Add(scroll);
             var stack = new StackPanel { Margin = new Thickness(28) };
             scroll.Content = stack;
-            stack.Children.Add(new TextBlock { Text = "LaunchFlow · Automation Harness", FontSize = 24,
+            stack.Children.Add(new TextBlock { Text = Tutorial.Active ? "LaunchFlow · 步骤练习窗口" : "LaunchFlow · Automation Harness", FontSize = 24,
                                                FontWeight = FontWeights.Bold, Margin = new Thickness(0, 0, 0, 20) });
             var button = Identify(
                 new Button { Content = "Start Task", Height = 42, HorizontalAlignment = HorizontalAlignment.Stretch },
@@ -170,7 +177,7 @@ namespace LaunchFlow.Native
             stack.Children.Add(
                 new TextBlock { Text = "Password (never record value)", Margin = new Thickness(0, 14, 0, 4) });
             stack.Children.Add(Identify(new PasswordBox { Height = 34 }, "password-input", "Password"));
-            stack.Children.Add(new VisionSurface { Height = 120, Margin = new Thickness(0, 14, 0, 10) });
+            if (!Tutorial.Active) stack.Children.Add(new VisionSurface { Height = 120, Margin = new Thickness(0, 14, 0, 10) });
             var drag = Identify(new System.Windows.Controls.Primitives.Thumb { Width = 120, Height = 36,
                                                                                Margin = new Thickness(0, 6, 0, 6),
                                                                                Background = Brushes.Teal },
@@ -184,6 +191,7 @@ namespace LaunchFlow.Native
                 stack.Children.Add(
                     Identify(new TextBlock { Text = "Scroll row " + i, Height = 32 }, "row-" + i, "Scroll row " + i));
             app.Run(window);
+            Tutorial.Stop();
         }
     }
 }

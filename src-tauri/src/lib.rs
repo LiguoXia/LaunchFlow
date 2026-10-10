@@ -1,6 +1,7 @@
 mod automation;
 mod product;
 mod startup;
+mod templates;
 mod updates;
 mod workspace_close;
 use automation::*;
@@ -137,6 +138,21 @@ fn save_scene(scene: Scene, state: State<'_, AppState>, app: tauri::AppHandle) -
             .join("\n"));
     }
     let scene = api(state.engine.store.save_scene(scene))?;
+    refresh_tray(&app)?;
+    Ok(scene)
+}
+#[tauri::command]
+fn rename_scene(
+    scene_id: String,
+    name: String,
+    expected_version: u32,
+    state: State<'_, AppState>,
+    app: tauri::AppHandle,
+) -> ApiResult<Scene> {
+    let scene = api(state
+        .engine
+        .store
+        .rename_scene(&scene_id, &name, expected_version))?;
     refresh_tray(&app)?;
     Ok(scene)
 }
@@ -555,6 +571,7 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(PendingUpdate(Mutex::new(None)))
         .invoke_handler(tauri::generate_handler![
+            templates::load_windows_demo,
             startup_status,
             set_startup_mode,
             open_signin_settings,
@@ -600,6 +617,7 @@ pub fn run() {
             bootstrap,
             create_scene,
             save_scene,
+            rename_scene,
             duplicate_scene,
             delete_scene,
             set_default_scene,

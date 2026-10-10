@@ -22,6 +22,7 @@ export interface Locator {
   automationId?: string;
   className?: string;
   frameworkId?: string;
+  secure?: boolean;
   ancestorPath?: unknown[];
   text?: string;
   ocr?: boolean;

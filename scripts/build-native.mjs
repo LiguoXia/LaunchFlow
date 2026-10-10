@@ -80,7 +80,7 @@ if (process.platform === 'win32') {
       'winexe',
       'LaunchFlow.Native.AuthorizedProgram',
     ],
-    ['harness', ['Common.cs', 'Harness.cs'], 'winexe'],
+    ['harness', ['Common.cs', 'Harness.cs', 'Tutorial.cs'], 'winexe'],
   ]) {
     const input = sources.map((x) => join(root, 'native/windows', x));
     const binary = join(out, `launchflow-${name}.exe`);

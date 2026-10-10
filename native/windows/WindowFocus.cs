@@ -13,6 +13,7 @@ namespace LaunchFlow.Native
         public virtual bool Exists(IntPtr h) { return Win.IsWindow(h); }
         public virtual bool Minimized(IntPtr h) { return Win.IsIconic(h); }
         public virtual IntPtr Foreground() { return Win.GetForegroundWindow(); }
+        public virtual IntPtr Root(IntPtr h) { return Win.GetAncestor(h, 2); }
         public virtual void Restore(IntPtr h) { Win.ShowWindowAsync(h, 9); }
         public virtual bool Request(IntPtr h) { return Win.SetForegroundWindow(h); }
         public virtual void Pause() { Thread.Sleep(25); }
@@ -20,6 +21,12 @@ namespace LaunchFlow.Native
     public static class WindowFocus
     {
         [ThreadStatic] public static Dictionary<string, object> LastDiagnostic;
+        static bool Matches(IntPtr h, FocusDesktop desktop)
+        {
+            var foreground = desktop.Foreground();
+            return foreground != IntPtr.Zero && (foreground == h || desktop.Root(foreground) == h);
+        }
+        public static bool IsForeground(IntPtr h) { return h != IntPtr.Zero && Matches(h, new FocusDesktop()); }
         public static void Activate(IntPtr h) { Activate(h, new FocusDesktop()); }
         public static void Activate(IntPtr h, FocusDesktop desktop)
         {
@@ -29,7 +36,7 @@ namespace LaunchFlow.Native
             {
                 bool present = h != IntPtr.Zero && desktop.Exists(h);
                 bool minimized = present && desktop.Minimized(h);
-                bool matched = present && !minimized && desktop.Foreground() == h;
+                bool matched = present && !minimized && Matches(h, desktop);
                 long elapsed = desktop.Milliseconds - start;
                 LastDiagnostic = Wire.Obj("stage", matched ? "foregroundConfirmed" : "foregroundWait",
                     "elapsedMs", elapsed, "restoreRequested", restored, "activationRequested", requested,
@@ -57,7 +64,7 @@ namespace LaunchFlow.Native
         public static void BeforeInput(IntPtr h, FocusDesktop desktop)
         {
             bool present = h != IntPtr.Zero && desktop.Exists(h);
-            bool matched = present && !desktop.Minimized(h) && desktop.Foreground() == h;
+            bool matched = present && !desktop.Minimized(h) && Matches(h, desktop);
             if (matched) return;
             var detail = LastDiagnostic == null ? Wire.Obj() : new Dictionary<string, object>(LastDiagnostic);
             detail["stage"] = "beforeInput";

@@ -2,11 +2,13 @@
 
 一个 Local-First 的 Windows / macOS 桌面工作环境编排器。Tauri 2 + Rust + React + TypeScript + SQLite。
 
-当前交付 **0.4.13 · 应用内配置 Windows 自动登录**：增加 [内置账户密码配置窗口、启用/更新/关闭与链接打开修复](docs/IN-APP-AUTOLOGON.md)，保留 [启动检查与失败记录、Windows 自动登录配置入口、中文输入捕获与回放验证](docs/STARTUP-TEXT-FIX.md)。**升级后请在设置中允许默认场景自动执行，并重新录制此前漏掉的文本。** 保留 [点击位置修复](docs/RECORDED-CLICK-FIX.md)、[窗口激活修复](docs/GUI-FOCUS-FIX.md)、[解锁前准备桌面应用](docs/DESKTOP-STARTUP.md)、[录制审阅修复](docs/RECORDING-REVIEW-FIX.md)、[关闭工作区应用](docs/WORKSPACE-CLOSE.md)、[应用图标](docs/APPLICATION-ICONS.md)、[预授权启动](docs/PREAUTHORIZED-LAUNCH.md) 和 [应用诊断日志](docs/APPLICATION-DIAGNOSTICS.md)。
+当前版本 **0.4.15 · 场景名称同步与 Windows 全步骤体验模板**：编辑器修改名称后，返回“我的场景”立即同步，并保留未保存的步骤草稿；可载入、编辑、删除与重新载入 Windows 体验模板，42 个步骤覆盖全部 32 种步骤类型。操作与验证详情见 [场景名称同步与体验模板](docs/SCENE-SYNC-AND-TEMPLATE.md)。包含 0.4.14 的 [QQ Secret 与场景编辑](docs/QQ-SECRET-AND-SCENE-EDITOR.md) 修复。
 
-Windows x64 下载：[安装包](https://github.com/LiguoXia/LaunchFlow/releases/download/v0.4.13/LaunchFlow_0.4.13_x64-setup.exe) · [便携 ZIP](https://github.com/LiguoXia/LaunchFlow/releases/download/v0.4.13/LaunchFlow_0.4.13_windows-x64-portable.zip) · [发布说明与校验文件](https://github.com/LiguoXia/LaunchFlow/releases/tag/v0.4.13)。这是未签名的预发布验收版；更新器未配置，升级请手动下载安装包。
+已有功能包括 [应用内配置 Windows 自动登录](docs/IN-APP-AUTOLOGON.md)、[默认场景启动与中文输入录制](docs/STARTUP-TEXT-FIX.md)、[点击位置修复](docs/RECORDED-CLICK-FIX.md)、[窗口激活修复](docs/GUI-FOCUS-FIX.md)、[解锁前准备桌面应用](docs/DESKTOP-STARTUP.md)、[录制审阅修复](docs/RECORDING-REVIEW-FIX.md)、[关闭工作区应用](docs/WORKSPACE-CLOSE.md)、[应用图标](docs/APPLICATION-ICONS.md)、[预授权启动](docs/PREAUTHORIZED-LAUNCH.md) 和 [应用诊断日志](docs/APPLICATION-DIAGNOSTICS.md)。**从旧版本升级后，请在设置中允许默认场景自动执行，并重新录制此前漏掉的文本。**
 
-本地制品位于 `artifacts/autologon/windows/`，该目录不提交到源码仓库。macOS 已提供 AX / ScreenCaptureKit / Vision / Keychain 原生实现，尚未在 Mac 实机编译或运行；不能视为跨平台验收已完成。当前没有标记为 V1 Release Candidate。
+Windows x64 下载：[安装包](https://github.com/LiguoXia/LaunchFlow/releases/download/v0.4.15/LaunchFlow_0.4.15_x64-setup.exe) · [便携 ZIP](https://github.com/LiguoXia/LaunchFlow/releases/download/v0.4.15/LaunchFlow_0.4.15_windows-x64-portable.zip) · [发布说明与校验文件](https://github.com/LiguoXia/LaunchFlow/releases/tag/v0.4.15)。这是未签名的预发布验收版；更新器未配置，升级请手动下载安装包。
+
+本地制品位于 `artifacts/scene-template/windows/`，该目录不提交到源码仓库。macOS 已提供 AX / ScreenCaptureKit / Vision / Keychain 原生实现，尚未在 Mac 实机编译或运行；不能视为跨平台验收已完成。当前没有标记为 V1 Release Candidate。
 
 - [V1 Release Readiness Report](docs/V1-RELEASE-READINESS.md)
 - [签名与发行流程](docs/RELEASE.md)
