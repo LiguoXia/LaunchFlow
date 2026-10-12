@@ -23,7 +23,7 @@
   flex-direction: column;
   gap: var(--space-2);
   color: var(--muted);
-  font-size: var(--type-caption);
+  font-size: var(--type-small);
 }
 .workspace-options input,
 .workspace-options select {
@@ -87,7 +87,7 @@
   color: var(--ink);
 }
 .secret-form .form-stack label {
-  font-size: var(--type-caption);
+  font-size: var(--type-small);
 }
 .secret-form .form-stack input {
   font-size: var(--type-small);
@@ -127,7 +127,7 @@
   flex-direction: column;
   gap: var(--space-2);
   color: var(--subtle);
-  font-size: var(--type-caption);
+  font-size: var(--type-small);
   font-weight: 500;
 }
 .transfer-page input:not([type='checkbox']),
@@ -280,7 +280,7 @@
 .close-app p {
   display: block;
   margin: 5px 0 0;
-  font-size: 12px;
+  font-size: var(--type-caption);
   color: var(--muted);
   overflow-wrap: anywhere;
 }
@@ -293,14 +293,14 @@
   opacity: 0.65;
 }
 .close-state {
-  font-size: 12px;
+  font-size: var(--type-caption);
   white-space: nowrap;
 }
 .close-footer {
   justify-content: space-between;
 }
 .close-footer > span {
-  font-size: 12px;
+  font-size: var(--type-caption);
 }
 .close-force {
   border: 1px solid var(--line);
@@ -309,7 +309,7 @@
   border-radius: var(--radius-md);
 }
 .close-force p {
-  font-size: 13px;
+  font-size: var(--type-small);
 }
 .close-shortcut input {
   min-width: 260px;

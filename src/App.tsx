@@ -18,8 +18,9 @@ import {
   ArrowUpRight,
 } from 'lucide-react';
 import { Modal } from './components/ui';
-import type { Bootstrap, Page, Run, Scene } from './domain/types';
+import type { Bootstrap, Page, Run, Scene, ScenePreferences } from './domain/types';
 import { mergeRun, mergeRuns } from './domain/editor';
+import { orderScenes } from './domain/scene-list';
 import { api, desktopAvailable } from './lib/api';
 import { WorkspaceContext } from './lib/workspace';
 import Home from './pages/Home';
@@ -66,9 +67,13 @@ export default function App() {
   const [showCloseWorkspace, setShowCloseWorkspace] = useState(false);
   const [pendingDefault, setPendingDefault] = useState<string | null | undefined>(undefined);
   const savingDefault = useRef(false);
-  const defaultRevision = useRef(0);
+  const savingScenePreferences = useRef(false);
+  const dataRevision = useRef(0);
   const [name, setName] = useState('');
-  const [runConfiguration, setRunConfiguration] = useState<Scene | null>(null);
+  const [runConfiguration, setRunConfiguration] = useState<{
+    scene: Scene;
+    source: 'manual' | 'quickLaunch';
+  } | null>(null);
   const [confirmation, setConfirmation] = useState<{
     title: string;
     body: string;
@@ -110,17 +115,17 @@ export default function App() {
         do {
           refreshRequested.current = false;
           events.current = [];
-          const revision = defaultRevision.current;
+          const revision = dataRevision.current;
           let next: Bootstrap;
           try {
             next = await api.bootstrap();
           } catch (error) {
-            if (revision !== defaultRevision.current) refreshRequested.current = true;
+            if (revision !== dataRevision.current) refreshRequested.current = true;
             if (refreshRequested.current) continue;
             throw error;
           }
           // Discard superseded snapshots instead of briefly restoring old UI state.
-          if (revision !== defaultRevision.current) refreshRequested.current = true;
+          if (revision !== dataRevision.current) refreshRequested.current = true;
           if (refreshRequested.current) continue;
           const duringFetch = events.current;
           setData((previous) => ({
@@ -139,7 +144,7 @@ export default function App() {
   const setDefaultScene = useCallback(async (sceneId: string | null) => {
     if (savingDefault.current) throw new Error('正在保存默认场景，请稍候。');
     savingDefault.current = true;
-    defaultRevision.current++;
+    dataRevision.current++;
     setPendingDefault(sceneId);
     try {
       const savedId = await api.setDefault(sceneId);
@@ -158,15 +163,42 @@ export default function App() {
       );
       setSelectedScene((scene) => (scene ? { ...scene, isDefault: scene.id === savedId } : scene));
     } finally {
-      defaultRevision.current++;
+      dataRevision.current++;
       savingDefault.current = false;
       // A rejected save reveals the last confirmed state again.
       setPendingDefault(undefined);
     }
   }, []);
+  const saveScenePreferences = async (save: () => Promise<ScenePreferences>) => {
+    if (savingScenePreferences.current) throw new Error('正在保存场景偏好，请稍候。');
+    savingScenePreferences.current = true;
+    dataRevision.current++;
+    try {
+      const saved = await save();
+      setData((current) =>
+        current
+          ? {
+              ...current,
+              scenes: orderScenes(current.scenes, saved.order),
+              scenePreferences: saved,
+            }
+          : current,
+      );
+    } catch (error) {
+      void refresh().catch((refreshError) => notify(String(refreshError), true));
+      throw error;
+    } finally {
+      dataRevision.current++;
+      savingScenePreferences.current = false;
+    }
+  };
+  const reorderScenes = (sceneIds: string[]) =>
+    saveScenePreferences(() => api.reorderScenes(sceneIds));
+  const setSceneQuickLaunch = (sceneId: string, enabled: boolean) =>
+    saveScenePreferences(() => api.setSceneQuickLaunch(sceneId, enabled));
   const renameScene = async (scene: Scene, name: string) => {
     const saved = await api.renameScene(scene.id, name, scene.version);
-    defaultRevision.current++;
+    dataRevision.current++;
     setData((current) =>
       current
         ? {
@@ -217,7 +249,7 @@ export default function App() {
             );
         }),
         api.onConfigureScene((scene) => {
-          if (active) setRunConfiguration(scene);
+          if (active) setRunConfiguration({ scene, source: 'manual' });
         }),
       ]);
       if (!active) {
@@ -258,7 +290,11 @@ export default function App() {
     setSelectedScene(scene);
     setPage('editor');
   };
-  const launch = (scene: Scene, parameters: Record<string, unknown> = {}) =>
+  const launch = (
+    scene: Scene,
+    parameters: Record<string, unknown> = {},
+    source: 'manual' | 'quickLaunch' = 'manual',
+  ) =>
     perform(async () => {
       const sensitive = await api.sensitiveActions(scene.id);
       if (
@@ -269,19 +305,19 @@ export default function App() {
         ))
       )
         return undefined;
-      const result = await api.runScene(scene.id, parameters, sensitive.length > 0);
+      const result = await api.runScene(scene.id, parameters, sensitive.length > 0, source);
       setRunConfiguration(null);
       setData((old) => (old ? { ...old, runs: mergeRun(old.runs, result) } : old));
       setSelectedRun(result.id);
       setPage('runs');
       return result;
     });
-  const run = async (scene: Scene) => {
+  const run = async (scene: Scene, source: 'manual' | 'quickLaunch' = 'manual') => {
     if (scene.parameters?.length) {
-      setRunConfiguration(scene);
+      setRunConfiguration({ scene, source });
       return undefined;
     }
-    return launch(scene);
+    return launch(scene, {}, source);
   };
   const confirm = (title: string, body: string) =>
     new Promise<boolean>((resolve) => setConfirmation({ title, body, resolve }));
@@ -353,7 +389,7 @@ export default function App() {
           </button>
           <div className="sidebar-footer">
             <span>LOCAL FIRST</span>
-            <span>v{data?.version || '0.4.16'}</span>
+            <span>v{data?.version || '0.4.19'}</span>
           </div>
         </div>
       </aside>
@@ -441,6 +477,8 @@ export default function App() {
               refresh,
               setDefaultScene,
               renameScene,
+              reorderScenes,
+              setSceneQuickLaunch,
               registerEditorLeave,
               perform,
               edit,
@@ -561,9 +599,9 @@ export default function App() {
       )}
       {runConfiguration && (
         <RunConfiguration
-          scene={runConfiguration}
+          scene={runConfiguration.scene}
           onClose={() => setRunConfiguration(null)}
-          onRun={(values) => launch(runConfiguration, values)}
+          onRun={(values) => launch(runConfiguration.scene, values, runConfiguration.source)}
         />
       )}
     </div>

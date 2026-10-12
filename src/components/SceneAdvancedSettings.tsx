@@ -1,5 +1,6 @@
 import type { Scene, Parameter, Trigger, TriggerDefinition, TriggerEvent } from '../domain/types';
 import { ParameterInput } from './RunConfiguration';
+import CronInput from './CronInput';
 export function JsonInput({
   value,
   onChange,
@@ -60,9 +61,9 @@ export default function SceneAdvancedSettings({
             })
           }
         >
-          <option value="askEveryTime">Ask Every Time · 每次执行确认</option>
-          <option value="allowForThisScene">Allow For This Scene · 允许此场景</option>
-          <option value="blockAtStartup">Block At Startup · 登录时阻止敏感操作</option>
+          <option value="askEveryTime">每次执行确认</option>
+          <option value="allowForThisScene">允许此场景执行</option>
+          <option value="blockAtStartup">登录时阻止敏感操作</option>
         </select>
         <small>适用于命令、Secret 输入和可修改应用内容的 GUI 操作；不会绕过系统授权。</small>
       </label>
@@ -77,9 +78,9 @@ export default function SceneAdvancedSettings({
             })
           }
         >
-          <option value="ignore">Ignore · 忽略重复触发</option>
-          <option value="queue">Queue · 按顺序排队</option>
-          <option value="restart">Restart · 取消当前并重启</option>
+          <option value="ignore">忽略重复触发</option>
+          <option value="queue">按顺序排队</option>
+          <option value="restart">取消当前并重启</option>
         </select>
       </label>
       <label>
@@ -248,6 +249,7 @@ export default function SceneAdvancedSettings({
             <label>
               触发方式
               <select
+                aria-label="触发方式"
                 value={t.kind}
                 onChange={(e) =>
                   updateTrigger(i, {
@@ -274,39 +276,47 @@ export default function SceneAdvancedSettings({
               />
               启用
             </label>
-            {Object.entries(t.config).map(([key, value]) => (
-              <label key={key}>
-                {(
-                  {
-                    time: '时间 HH:mm',
-                    days: '星期 [1–7]',
-                    shortcut: '快捷键',
-                    host: '检测主机',
-                    port: '端口',
-                    ssid: 'Wi-Fi 名称',
-                    state: '电源 ac / battery',
-                  } as Record<string, string>
-                )[key] ?? key}
-                {Array.isArray(value) ? (
-                  <JsonInput
-                    value={value}
-                    onChange={(v) => updateTrigger(i, { config: { ...t.config, [key]: v } })}
-                  />
-                ) : (
-                  <input
-                    value={String(value ?? '')}
-                    onChange={(e) =>
-                      updateTrigger(i, {
-                        config: {
-                          ...t.config,
-                          [key]: key === 'port' ? Number(e.target.value) : e.target.value,
-                        },
-                      })
-                    }
-                  />
-                )}
-              </label>
-            ))}
+            {t.kind === 'cron' && (
+              <CronInput
+                value={String(t.config.expression ?? '')}
+                onChange={(expression) => updateTrigger(i, { config: { expression } })}
+              />
+            )}
+            {Object.entries(t.config)
+              .filter(([key]) => t.kind !== 'cron' || key !== 'expression')
+              .map(([key, value]) => (
+                <label key={key}>
+                  {(
+                    {
+                      time: '时间 HH:mm',
+                      days: '星期 [1–7]',
+                      shortcut: '快捷键',
+                      host: '检测主机',
+                      port: '端口',
+                      ssid: 'Wi-Fi 名称',
+                      state: '电源 ac / battery',
+                    } as Record<string, string>
+                  )[key] ?? key}
+                  {Array.isArray(value) ? (
+                    <JsonInput
+                      value={value}
+                      onChange={(v) => updateTrigger(i, { config: { ...t.config, [key]: v } })}
+                    />
+                  ) : (
+                    <input
+                      value={String(value ?? '')}
+                      onChange={(e) =>
+                        updateTrigger(i, {
+                          config: {
+                            ...t.config,
+                            [key]: key === 'port' ? Number(e.target.value) : e.target.value,
+                          },
+                        })
+                      }
+                    />
+                  )}
+                </label>
+              ))}
             {(scene.parameters?.length ?? 0) > 0 && (
               <label>
                 触发参数（JSON）

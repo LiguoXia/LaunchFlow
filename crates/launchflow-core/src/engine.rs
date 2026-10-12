@@ -274,6 +274,16 @@ impl Engine {
         parameters: Values,
         approved: bool,
     ) -> Result<Run> {
+        self.start_authorized_with_trigger(scene_id, source, parameters, approved, None)
+    }
+    pub fn start_authorized_with_trigger(
+        self: &Arc<Self>,
+        scene_id: &str,
+        source: &str,
+        parameters: Values,
+        approved: bool,
+        trigger_id: Option<&str>,
+    ) -> Result<Run> {
         let scene = self.store.scene(scene_id)?;
         let snapshots = self.snapshots(&scene, true)?;
         crate::policy::check(
@@ -283,6 +293,7 @@ impl Engine {
         )?;
         let parameters = parameters::bind(&scene.parameters, &parameters)?;
         let mut run = Run::new(scene, source);
+        run.trigger_id = trigger_id.map(str::to_owned);
         run.parameter_snapshot = parameters;
         run.subflow_snapshots = snapshots;
         run.profiles_snapshot = self.store.profiles()?;

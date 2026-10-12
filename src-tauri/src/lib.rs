@@ -12,7 +12,7 @@ use launchflow_core::{
     parameters::Values,
     platform::{native_platform_with_automation, ApplicationAuthorizationAction},
     registry::{NodeDefinition, NodeRegistry},
-    storage::Store,
+    storage::{ScenePreferences, Store},
     triggers::{TriggerDefinition, TriggerEngine, TriggerEvent},
     validation::validate_profile,
 };
@@ -76,6 +76,7 @@ async fn application_icons(
 #[serde(rename_all = "camelCase")]
 struct Bootstrap {
     scenes: Vec<Scene>,
+    scene_preferences: ScenePreferences,
     profiles: Vec<ApplicationProfile>,
     runs: Vec<Run>,
     settings: Settings,
@@ -92,6 +93,7 @@ async fn bootstrap(app: tauri::AppHandle, state: State<'_, AppState>) -> ApiResu
     let e = &state.engine;
     Ok(Bootstrap {
         scenes: api(e.store.scenes())?,
+        scene_preferences: api(e.store.scene_preferences())?,
         profiles: api(e.store.profiles())?,
         runs: api(e.store.runs())?,
         settings: api(e.store.settings())?,
@@ -195,6 +197,24 @@ fn set_default_scene(
     Ok(scene_id)
 }
 #[tauri::command]
+fn reorder_scenes(
+    scene_ids: Vec<String>,
+    state: State<'_, AppState>,
+) -> ApiResult<ScenePreferences> {
+    api(state.engine.store.reorder_scenes(&scene_ids))
+}
+#[tauri::command]
+fn set_scene_quick_launch(
+    scene_id: String,
+    enabled: bool,
+    state: State<'_, AppState>,
+) -> ApiResult<ScenePreferences> {
+    api(state
+        .engine
+        .store
+        .set_scene_quick_launch(&scene_id, enabled))
+}
+#[tauri::command]
 fn save_draft(scene: Scene, state: State<'_, AppState>) -> ApiResult<()> {
     if scene.schema_version != 1
         || serde_json::to_vec(&scene).map_err(|e| e.to_string())?.len() > 1_048_576
@@ -219,6 +239,30 @@ fn validate_scene(scene: Scene, state: State<'_, AppState>) -> ApiResult<Vec<Val
 fn save_profile(profile: ApplicationProfile, state: State<'_, AppState>) -> ApiResult<()> {
     api(validate_profile(&profile))?;
     api(state.engine.store.save_profile(&profile))
+}
+#[tauri::command]
+async fn application_capture(
+    source: String,
+    state: State<'_, AppState>,
+) -> ApiResult<launchflow_core::application_discovery::Capture> {
+    let known = api(state.engine.store.profiles())?;
+    api(launchflow_core::application_discovery::capture(
+        state.engine.platform.automation().as_ref(),
+        state.engine.platform.os(),
+        &source,
+        &known,
+    )
+    .await)
+}
+#[tauri::command]
+fn application_capture_add(
+    profiles: Vec<ApplicationProfile>,
+    state: State<'_, AppState>,
+) -> ApiResult<usize> {
+    api(state
+        .engine
+        .store
+        .add_discovered_profiles(&profiles, state.engine.platform.os()))
 }
 #[tauri::command]
 async fn delete_profile(profile_id: String, state: State<'_, AppState>) -> ApiResult<()> {
@@ -281,14 +325,27 @@ async fn run_scene(
     scene_id: String,
     parameters: Option<Values>,
     approved: Option<bool>,
+    source: Option<String>,
     state: State<'_, AppState>,
 ) -> ApiResult<Run> {
+    let source = source.as_deref().unwrap_or("manual");
+    if !["manual", "quickLaunch"].contains(&source) {
+        return Err("Invalid manual run source".into());
+    }
     api(state.triggers.manual_authorized(
         &scene_id,
         parameters.unwrap_or_default(),
-        "manual",
+        source,
         approved.unwrap_or(false),
     ))
+}
+#[tauri::command]
+async fn cron_preview(expression: String) -> ApiResult<Vec<String>> {
+    tauri::async_runtime::spawn_blocking(move || {
+        api(launchflow_core::cron_schedule::preview(&expression))
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 #[tauri::command]
 fn pause_run(run_id: String, state: State<'_, AppState>) -> ApiResult<()> {
@@ -621,15 +678,20 @@ pub fn run() {
             duplicate_scene,
             delete_scene,
             set_default_scene,
+            reorder_scenes,
+            set_scene_quick_launch,
             save_draft,
             get_draft,
             delete_draft,
             validate_scene,
             save_profile,
+            application_capture,
+            application_capture_add,
             delete_profile,
             application_authorization_status,
             application_authorization_change,
             run_scene,
+            cron_preview,
             stop_run,
             pause_run,
             resume_run,

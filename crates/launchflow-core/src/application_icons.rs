@@ -112,10 +112,20 @@ pub async fn load(
         // Do not resolve URLs, relative paths or UNC/device paths as shell resources.
         let local = if cfg!(windows) {
             let b = source.path.as_bytes();
-            b.len() >= 3
+            let app = source
+                .path
+                .strip_prefix("shell:AppsFolder\\")
+                .is_some_and(|id| {
+                    !id.is_empty()
+                        && id.contains('!')
+                        && id
+                            .bytes()
+                            .all(|c| c.is_ascii_alphanumeric() || b"._!-".contains(&c))
+                });
+            app || (b.len() >= 3
                 && b[0].is_ascii_alphabetic()
                 && b[1] == b':'
-                && (b[2] == b'\\' || b[2] == b'/')
+                && (b[2] == b'\\' || b[2] == b'/'))
         } else {
             source.path.starts_with('/') || (source.path.is_empty() && !source.bundle_id.is_empty())
         };

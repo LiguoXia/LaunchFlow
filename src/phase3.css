@@ -1,5 +1,6 @@
 .automation-toolbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 20px;
   padding: 10px 24px;
@@ -77,13 +78,13 @@
 }
 .action-tools .button {
   padding: 8px;
-  font-size: 11px;
+  font-size: var(--type-small);
   white-space: nowrap;
 }
 .element-info {
   max-height: 340px;
   overflow: auto;
-  font-size: 11px;
+  font-size: var(--type-small);
   white-space: pre-wrap;
   word-break: break-word;
   background: var(--surface);
@@ -142,10 +143,10 @@
   padding: 10px;
 }
 .inspector .locator-editor label {
-  font-size: 11px;
+  font-size: var(--type-small);
 }
 .locator-editor details summary {
-  font-size: 11px;
+  font-size: var(--type-small);
   cursor: pointer;
 }
 .settings-section:has(.permission-row) {

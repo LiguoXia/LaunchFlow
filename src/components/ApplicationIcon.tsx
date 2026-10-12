@@ -17,7 +17,13 @@ export default function ApplicationIcon({
 }) {
   const { data } = useWorkspace();
   const file =
-    path ?? (data.os === 'windows' ? profile?.windows.executable : profile?.macos.appPath) ?? '';
+    path ??
+    (data.os === 'windows'
+      ? profile?.launchArguments[0]?.startsWith('shell:AppsFolder\\')
+        ? profile.launchArguments[0]
+        : profile?.windows.executable
+      : profile?.macos.appPath) ??
+    '';
   const bundleId = data.os === 'macos' ? (profile?.macos.bundleId ?? '') : '';
   const key = JSON.stringify([file, bundleId]);
   const [icon, setIcon] = useState<{ key: string; src: string | null } | null>(null);

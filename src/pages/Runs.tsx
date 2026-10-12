@@ -7,6 +7,7 @@ import WorkflowNodeIcon from '../components/WorkflowNodeIcon';
 import { dateLabel, formatDuration } from '../domain/editor';
 import { api } from '../lib/api';
 import { useWorkspace } from '../lib/workspace';
+import { runSource } from '../domain/run-source';
 export default function Runs() {
   const { data, selectedRun, setSelectedRun, perform, refresh, run, busy, confirm } =
     useWorkspace();
@@ -36,7 +37,7 @@ export default function Runs() {
         setSelectedRun(next.id);
       });
     return (
-      <div className="page">
+      <div className="page runs-page">
         <button className="back-link" onClick={() => setSelectedRun(null)}>
           <ArrowLeft size={15} />
           运行历史
@@ -44,7 +45,7 @@ export default function Runs() {
         <PageTitle
           eyebrow={`RUN · VERSION ${detail.sceneVersion}`}
           title={detail.sceneName}
-          description={`${dateLabel(detail.startedAt)} · ${detail.source}`}
+          description={`${dateLabel(detail.startedAt)} · ${runSource(detail).label}${runSource(detail).detail ? ' · ' + runSource(detail).detail : ''}`}
           actions={
             <>
               <Status status={detail.status} />
@@ -317,7 +318,7 @@ export default function Runs() {
   }
   const rows = data.runs.filter((r) => filter === 'all' || r.status === filter);
   return (
-    <div className="page">
+    <div className="page runs-page">
       <PageTitle
         eyebrow="RUN HISTORY"
         title="每次运行，都有记录"
@@ -354,6 +355,7 @@ export default function Runs() {
           <div className="table-head">
             <span>场景 / 时间</span>
             <span>状态</span>
+            <span>触发方式</span>
             <span>任务</span>
             <span>耗时</span>
             <span />
@@ -372,6 +374,13 @@ export default function Runs() {
                 </span>
               </button>
               <Status status={r.status} />
+              <div
+                className="run-trigger"
+                title={[runSource(r).label, runSource(r).detail].filter(Boolean).join(' · ')}
+              >
+                <strong>{runSource(r).label}</strong>
+                {runSource(r).detail && <small>{runSource(r).detail}</small>}
+              </div>
               <span>
                 {r.nodeRuns.filter((n) => n.status === 'succeeded').length} / {r.nodeRuns.length}
               </span>

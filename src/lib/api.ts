@@ -6,12 +6,23 @@ import type {
   Run,
   RunEvent,
   Scene,
+  ScenePreferences,
   Settings,
   ValidationIssue,
   TriggerEvent,
 } from '../domain/types';
 
 export const desktopAvailable = isTauri();
+export interface ApplicationCaptureResult {
+  apps: {
+    key: string;
+    profile: ApplicationProfile;
+    categories: string[];
+    existingId: string | null;
+    unavailable: string | null;
+  }[];
+  warnings: string[];
+}
 export interface StartupStatus {
   registrationId: string;
   legacyEnabled: boolean;
@@ -54,6 +65,9 @@ export interface ApplicationAuthorization {
   taskPath?: string;
 }
 export const api = {
+  reorderScenes: (sceneIds: string[]) => invoke<ScenePreferences>('reorder_scenes', { sceneIds }),
+  setSceneQuickLaunch: (sceneId: string, enabled: boolean) =>
+    invoke<ScenePreferences>('set_scene_quick_launch', { sceneId, enabled }),
   startupStatus: () => invoke<StartupStatus>('startup_status'),
   setStartupMode: (mode: 'login' | 'beforeUnlock' | 'disabled') =>
     invoke<void>('set_startup_mode', { mode }),
@@ -79,14 +93,23 @@ export const api = {
   deleteDraft: (sceneId: string) => invoke<void>('delete_draft', { sceneId }),
   validate: (scene: Scene) => invoke<ValidationIssue[]>('validate_scene', { scene }),
   saveProfile: (profile: ApplicationProfile) => invoke<void>('save_profile', { profile }),
+  captureApplications: (source: 'workspace' | 'system') =>
+    invoke<ApplicationCaptureResult>('application_capture', { source }),
+  addCapturedApplications: (profiles: ApplicationProfile[]) =>
+    invoke<number>('application_capture_add', { profiles }),
   deleteProfile: (profileId: string) => invoke<void>('delete_profile', { profileId }),
   applicationAuthorization: (profile: ApplicationProfile) =>
     invoke<ApplicationAuthorization>('application_authorization_status', { profile }),
   changeApplicationAuthorization: (profileId: string, grant: boolean) =>
     invoke<ApplicationAuthorization>('application_authorization_change', { profileId, grant }),
   sensitiveActions: (sceneId: string) => invoke<string[]>('sensitive_actions', { sceneId }),
-  runScene: (sceneId: string, parameters: Record<string, unknown> = {}, approved = false) =>
-    invoke<Run>('run_scene', { sceneId, parameters, approved }),
+  cronPreview: (expression: string) => invoke<string[]>('cron_preview', { expression }),
+  runScene: (
+    sceneId: string,
+    parameters: Record<string, unknown> = {},
+    approved = false,
+    source: 'manual' | 'quickLaunch' = 'manual',
+  ) => invoke<Run>('run_scene', { sceneId, parameters, approved, source }),
   pauseRun: (runId: string) => invoke<void>('pause_run', { runId }),
   resumeRun: (runId: string) => invoke<void>('resume_run', { runId }),
   decideNode: (runId: string, nodeId: string, action: 'retry' | 'skip') =>

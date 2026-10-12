@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
-import { FolderOpen, Pencil, Plus, Search, Trash2 } from 'lucide-react';
+import { AppWindow, Monitor, FolderOpen, Pencil, Plus, Search, Trash2 } from 'lucide-react';
+import ApplicationCapture from '../components/ApplicationCapture';
 import ApplicationIcon from '../components/ApplicationIcon';
 import { Empty, Modal, PageTitle } from '../components/ui';
 import type { ApplicationProfile } from '../domain/types';
@@ -10,6 +11,7 @@ export default function Applications() {
   const { data, perform, refresh, busy, confirm, notify } = useWorkspace();
   const [draft, setDraft] = useState<ApplicationProfile | null>(null);
   const [query, setQuery] = useState('');
+  const [captureSource, setCaptureSource] = useState<'workspace' | 'system' | null>(null);
   const [authorization, setAuthorization] = useState<ApplicationAuthorization | null>(null);
   const [authorizing, setAuthorizing] = useState(false);
   useEffect(() => {
@@ -90,18 +92,41 @@ export default function Applications() {
     p.displayName.toLowerCase().includes(query.toLowerCase()),
   );
   return (
-    <div className="page">
+    <div className="page applications-page">
       <PageTitle
         eyebrow="APPLICATION LIBRARY"
         title="你的工具，各就各位"
         description="应用使用固定身份，启动路径按设备绑定。配置一次，在多个场景中复用。"
         actions={
-          <button className="button primary" onClick={add}>
-            <Plus size={16} />
-            添加应用
-          </button>
+          <div className="application-library-actions">
+            <button
+              className="button secondary"
+              disabled={busy}
+              onClick={() => setCaptureSource('workspace')}
+            >
+              <Monitor size={16} />
+              捕获工作区应用
+            </button>
+            {data.os === 'windows' && (
+              <button
+                className="button secondary"
+                disabled={busy}
+                onClick={() => setCaptureSource('system')}
+              >
+                <AppWindow size={16} />
+                捕获系统默认应用
+              </button>
+            )}
+            <button className="button primary" onClick={add}>
+              <Plus size={16} />
+              添加应用
+            </button>
+          </div>
         }
       />
+      {captureSource && (
+        <ApplicationCapture source={captureSource} onClose={() => setCaptureSource(null)} />
+      )}
       <div className="list-toolbar">
         <label className="search-input">
           <Search size={17} />

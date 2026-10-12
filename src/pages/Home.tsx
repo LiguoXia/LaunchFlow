@@ -10,6 +10,7 @@ import {
   ShieldCheck,
   Sparkles,
   Workflow,
+  Zap,
 } from 'lucide-react';
 import { PageTitle, SceneIcon, Status, TextLink } from '../components/ui';
 import { dateLabel, formatDuration } from '../domain/editor';
@@ -17,6 +18,9 @@ import { useWorkspace } from '../lib/workspace';
 export default function Home() {
   const { data, setPage, edit, run, create, busy, setSelectedRun } = useWorkspace();
   const active = data.scenes.find((s) => s.isDefault);
+  const quickLaunch = data.scenes.filter((scene) =>
+    data.scenePreferences.quickLaunchIds.includes(scene.id),
+  );
   const lastRun = active && data.runs.find((r) => r.sceneId === active.id);
   const successful = data.runs.filter((r) => r.status === 'succeeded').length;
   const hour = new Date().getHours();
@@ -100,6 +104,43 @@ export default function Home() {
             LOCAL FIRST. ALWAYS YOURS.
           </div>
         </div>
+      </section>
+      <section className="quick-launch-section" aria-label="快捷启动">
+        <div className="section-heading">
+          <h2>
+            <Zap size={18} /> 快捷启动 <span>{quickLaunch.length}</span>
+          </h2>
+          <TextLink onClick={() => setPage('scenes')}>管理快捷启动</TextLink>
+        </div>
+        {quickLaunch.length ? (
+          <div className="quick-launch-grid">
+            {quickLaunch.map((scene) => (
+              <article className="quick-launch-card" key={scene.id} data-scene-id={scene.id}>
+                <SceneIcon icon={scene.icon} color={scene.color} />
+                <div className="quick-launch-info">
+                  <strong title={scene.name}>{scene.name}</strong>
+                  <small>{scene.workflow.nodes.length} 个任务</small>
+                </div>
+                <button
+                  className="button primary small"
+                  aria-label={`启动「${scene.name}」`}
+                  disabled={busy}
+                  onClick={() => void run(scene, 'quickLaunch')}
+                >
+                  <Play size={14} /> 启动
+                </button>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <div className="quick-launch-empty">
+            <Zap size={20} />
+            <p>
+              在“我的场景”点击 <Zap size={14} aria-label="闪电图标" />
+              ，把常用场景添加到这里。
+            </p>
+          </div>
+        )}
       </section>
       <div className="stats-grid">
         <div>

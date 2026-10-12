@@ -313,6 +313,8 @@ pub struct Run {
     pub scene_snapshot: Scene,
     pub status: RunStatus,
     pub source: String,
+    #[serde(default)]
+    pub trigger_id: Option<String>,
     pub started_at: String,
     pub ended_at: Option<String>,
     pub duration_ms: u64,
@@ -363,6 +365,7 @@ impl Run {
             scene_snapshot: scene,
             status: RunStatus::Running,
             source: source.into(),
+            trigger_id: None,
             started_at: now(),
             ended_at: None,
             duration_ms: 0,

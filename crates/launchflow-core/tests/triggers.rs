@@ -111,6 +111,125 @@ async fn schedule_weekday_and_persistent_dedup() {
     assert_eq!(store.runs().unwrap().len(), 3);
 }
 #[tokio::test]
+async fn cron_five_and_six_fields_deduplicate_restart_and_preserve_the_trigger_snapshot() {
+    let e = Engine::new(
+        Arc::new(Store::memory().unwrap()),
+        Arc::new(NodeRegistry::builtins()),
+        native_platform(),
+    );
+    let minute = scene(
+        &e,
+        "minute",
+        "cron",
+        json!({"expression":"*/5 9 * * MON-FRI"}),
+    );
+    let seconds = scene(
+        &e,
+        "seconds",
+        "cron",
+        json!({"expression":"10,20 0 9 * * MON"}),
+    );
+    let t = TriggerEngine::new(e.clone());
+    t.refresh().unwrap();
+    let time = |s| Local.with_ymd_and_hms(2026, 10, 5, 9, 0, s).unwrap();
+    t.poll_at(time(7)).await.unwrap(); // Five-field schedules still fire after second zero.
+    t.poll_at(time(10)).await.unwrap();
+    t.poll_at(time(10)).await.unwrap();
+    settle(&e).await;
+    assert_eq!(e.store.runs().unwrap().len(), 2);
+    let restarted = TriggerEngine::new(e.clone());
+    restarted.refresh().unwrap();
+    restarted.poll_at(time(10)).await.unwrap();
+    restarted.poll_at(time(20)).await.unwrap();
+    restarted.poll_at(time(10)).await.unwrap(); // Clock rollback does not re-fire an old slot.
+    settle(&e).await;
+    let runs = e.store.runs().unwrap();
+    assert_eq!(runs.len(), 3);
+    for run in &runs {
+        assert_eq!(run.source, "cron");
+        assert_eq!(
+            run.trigger_id.as_ref(),
+            Some(&run.scene_snapshot.triggers[0].id)
+        );
+    }
+    assert_eq!(runs.iter().filter(|r| r.scene_id == minute.id).count(), 1);
+    let mut changed = seconds;
+    changed.triggers[0].config = json!({"expression":"0 10 * * *"});
+    e.store.save_scene(changed).unwrap();
+    assert!(e
+        .store
+        .runs()
+        .unwrap()
+        .iter()
+        .filter(|r| r.scene_id != minute.id)
+        .all(|r| r.scene_snapshot.triggers[0].config["expression"] == "10,20 0 9 * * MON"));
+}
+
+#[test]
+fn cron_validation_calendar_and_disabled_triggers() {
+    use launchflow_core::cron_schedule::{observation, parse};
+    for invalid in [
+        "",
+        "* * *",
+        "61 * * * *",
+        "*/0 * * * *",
+        "0 0 0 0 0 0",
+        "0 0 * * * * 2026",
+    ] {
+        assert!(parse(invalid).is_err(), "{invalid}");
+    }
+    let monday = Local.with_ymd_and_hms(2026, 10, 5, 9, 5, 13).unwrap();
+    assert!(observation("*/5 9 * OCT MON-FRI", monday).unwrap().1);
+    assert!(!observation("0 8 * * *", monday).unwrap().1);
+    assert!(
+        observation("5 9 1 * MON", monday).unwrap().1,
+        "DOM and DOW follow POSIX OR semantics"
+    );
+    let leap = Local.with_ymd_and_hms(2028, 2, 29, 12, 0, 1).unwrap();
+    assert!(observation("0 12 29 FEB *", leap).unwrap().1);
+    let mut s = Scene::new("invalid cron");
+    s.triggers = vec![Trigger {
+        id: id(),
+        kind: "cron".into(),
+        enabled: false,
+        config: json!({"expression":"invalid"}),
+        parameters: Values::new(),
+    }];
+    assert!(TriggerRegistry::default().validate(&s).is_err());
+}
+
+#[tokio::test]
+async fn cron_disabled_no_catchup_and_sensitive_confirmation_are_preserved() {
+    let e = Engine::new(
+        Arc::new(Store::memory().unwrap()),
+        Arc::new(NodeRegistry::builtins()),
+        native_platform(),
+    );
+    let mut s = scene(&e, "disabled", "cron", json!({"expression":"0 9 * * *"}));
+    s.triggers[0].enabled = false;
+    e.store.save_scene(s).unwrap();
+    scene(&e, "missed", "cron", json!({"expression":"0 8 * * *"}));
+    let mut sensitive = scene(&e, "sensitive", "cron", json!({"expression":"* * * * *"}));
+    sensitive.workflow.nodes = vec![Node::new(
+        "system.command",
+        "never executed",
+        json!({"program":"cmd.exe","arguments":["/c","exit","0"],"workingDirectory":"","captureOutput":true}),
+    )];
+    sensitive.sensitive_action_policy =
+        launchflow_core::policy::SensitiveActionPolicy::AskEveryTime;
+    let sensitive = e.store.save_scene(sensitive).unwrap();
+    let t = TriggerEngine::new(e.clone());
+    t.refresh().unwrap();
+    t.poll_at(Local.with_ymd_and_hms(2026, 10, 5, 9, 0, 0).unwrap())
+        .await
+        .unwrap();
+    assert!(e.store.runs().unwrap().is_empty());
+    assert!(t
+        .statuses()
+        .iter()
+        .any(|event| event.scene_id == sensitive.id && event.kind == "error"));
+}
+#[tokio::test]
 async fn lifecycle_hotkey_and_default_login_use_registry() {
     let e = Engine::new(
         Arc::new(Store::memory().unwrap()),
@@ -137,7 +256,7 @@ async fn lifecycle_hotkey_and_default_login_use_registry() {
     assert_eq!(runs.len(), 3);
     assert!(!runs.iter().any(|r| r.scene_id == b.id));
     assert!(t.fire(&b.id, &b.triggers[0].id).is_err());
-    assert_eq!(t.registry.definitions().len(), 10);
+    assert_eq!(t.registry.definitions().len(), 11);
 }
 #[tokio::test]
 async fn startup_policy_rejection_is_visible_and_authorized_scene_passes_preflight() {

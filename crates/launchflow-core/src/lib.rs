@@ -1,6 +1,8 @@
+pub mod application_discovery;
 pub mod application_icons;
 pub mod application_log;
 pub mod automation;
+pub mod cron_schedule;
 pub mod diagnostics;
 pub mod engine;
 pub mod model;

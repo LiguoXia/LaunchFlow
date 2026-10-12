@@ -37,7 +37,7 @@ fn phase1_database_documents_defaults_history_and_drafts_survive_v2() {
             conn.execute(&format!("UPDATE {table} SET document=?1"), [v.to_string()])
                 .unwrap();
         }
-        conn.execute_batch("DROP TABLE trigger_firings; DROP TABLE workspace_close_preferences; PRAGMA user_version=1;")
+        conn.execute_batch("DROP TABLE trigger_firings; DROP TABLE workspace_close_preferences; DROP TABLE scene_preferences; PRAGMA user_version=1;")
             .unwrap();
         let mut v: serde_json::Value = serde_json::from_str(
             &conn
@@ -84,6 +84,6 @@ fn phase1_database_documents_defaults_history_and_drafts_survive_v2() {
             .unwrap()
             .query_row::<u32, _, _>("PRAGMA user_version", [], |r| r.get(0))
             .unwrap(),
-        3
+        4
     );
 }

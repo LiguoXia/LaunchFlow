@@ -45,8 +45,12 @@ for (const name of [
   'IN-APP-AUTOLOGON.md',
   'QQ-SECRET-AND-SCENE-EDITOR.md',
   'SCENE-SYNC-AND-TEMPLATE.md',
+  'SCENE-ORDER-AND-QUICK-LAUNCH.md',
+  'CRON-AND-APPLICATION-CAPTURE.md',
 ])
   await copyFile(join('docs', name), join(directory, name));
+const releaseNotes = join('docs', 'releases', `v${version}.md`);
+if (existsSync(releaseNotes)) await copyFile(releaseNotes, join(directory, 'RELEASE-NOTES.md'));
 const quote = (s) => "'" + s.replaceAll("'", "''") + "'";
 const powershellEnv = {
   ...process.env,

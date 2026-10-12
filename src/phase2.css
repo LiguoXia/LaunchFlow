@@ -36,14 +36,14 @@
   align-items: center;
   gap: 10px;
   margin-bottom: 10px;
-  font-size: var(--type-caption);
+  font-size: var(--type-body);
 }
 .dag-node-title strong {
   max-width: 160px;
   overflow-wrap: anywhere;
 }
 .dag-node small {
-  font-size: 9px;
+  font-size: var(--type-caption);
   color: var(--subtle);
 }
 .dag-node.disabled {
@@ -64,7 +64,7 @@
   position: absolute;
   right: 0;
   transform: translateY(-50%);
-  font-size: 8px;
+  font-size: var(--type-caption);
   color: var(--subtle);
 }
 .dag-outlet > span {
@@ -87,10 +87,10 @@
   color: var(--ink);
 }
 .dag-annotation strong {
-  font-size: 11px;
+  font-size: var(--type-small);
 }
 .dag-annotation small {
-  font-size: 8px;
+  font-size: var(--type-caption);
   color: var(--muted);
 }
 .dag-annotation.comment {
@@ -106,7 +106,7 @@
 }
 .react-flow__edge-text {
   fill: var(--subtle);
-  font-size: 10px;
+  font-size: var(--type-caption);
 }
 .react-flow__edge-path {
   stroke: #819d8e;
@@ -127,7 +127,7 @@
   height: 75px;
 }
 .canvas-help {
-  font-size: 9px;
+  font-size: var(--type-caption);
   color: var(--subtle);
   padding: 9px 12px;
   background: var(--surface);
@@ -145,7 +145,7 @@
 }
 .config-block summary {
   cursor: pointer;
-  font-size: 11px;
+  font-size: var(--type-small);
   overflow-wrap: anywhere;
   margin-bottom: 10px;
 }
@@ -159,13 +159,13 @@
   flex-direction: row;
 }
 .config-block > small {
-  font-size: 9px;
+  font-size: var(--type-caption);
   color: var(--subtle);
 }
 .variable-reference {
   display: block;
   overflow-wrap: anywhere;
-  font-size: 9px;
+  font-size: var(--type-caption);
   padding: 8px;
   background: var(--bg);
   border-radius: 5px;
@@ -183,7 +183,7 @@
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   background: var(--surface);
-  font-size: 11px;
+  font-size: var(--type-small);
 }
 .run-snapshot summary {
   cursor: pointer;
@@ -216,6 +216,6 @@
   }
   .mode-label button {
     padding: 6px;
-    font-size: 9px;
+    font-size: var(--type-caption);
   }
 }

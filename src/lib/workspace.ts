@@ -11,10 +11,12 @@ export interface Workspace {
   refresh: () => Promise<void>;
   setDefaultScene: (sceneId: string | null) => Promise<void>;
   renameScene: (scene: Scene, name: string) => Promise<Scene>;
+  reorderScenes: (sceneIds: string[]) => Promise<void>;
+  setSceneQuickLaunch: (sceneId: string, enabled: boolean) => Promise<void>;
   registerEditorLeave: (handler: () => Promise<boolean>) => () => void;
   perform: <T>(fn: () => Promise<T>) => Promise<T | undefined>;
   edit: (scene: Scene) => void;
-  run: (scene: Scene) => Promise<Run | undefined>;
+  run: (scene: Scene, source?: 'manual' | 'quickLaunch') => Promise<Run | undefined>;
   create: () => void;
   closeWorkspace: () => void;
   notify: (text: string, error?: boolean) => void;

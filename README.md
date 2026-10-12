@@ -2,15 +2,21 @@
 
 一个 Local-First 的 Windows / macOS 桌面工作环境编排器。Tauri 2 + Rust + React + TypeScript + SQLite。
 
-当前版本 **0.4.16 · 凭据弹框与导入导出表单**：统一留白、输入框、下拉框与按钮布局，适配深色主题和窄窗口。详见 [本版说明](docs/releases/v0.4.16.md)。
+当前版本 **0.4.19 · 字体与可读性**：统一中文字体与字号，正文 15px、辅助说明至少 13px；加宽场景设置面板，放大标签与输入框，改善深色对比度和窄窗口布局。详见 [本版说明](docs/releases/v0.4.19.md)。
+
+包含 **0.4.18 · Cron 与应用捕获**：场景支持 5 / 6 段 Cron 表达式及下次执行时间预览；运行历史显示触发方式；应用库可捕获工作区应用、Windows 内置应用和当前默认应用，勾选批量添加，已有应用自动勾选置灰。详见 [操作说明](docs/CRON-AND-APPLICATION-CAPTURE.md) 与 [版本说明](docs/releases/v0.4.18.md)。
+
+包含 **0.4.17 · 场景排序与快捷启动**：“我的场景”支持拖拽排序和添加 / 取消快捷启动；概览可一键运行常用场景，排序与选择在重启后保留。详见 [操作说明](docs/SCENE-ORDER-AND-QUICK-LAUNCH.md) 与 [版本说明](docs/releases/v0.4.17.md)。
+
+包含 **0.4.16 · 凭据弹框与导入导出表单**：统一留白、输入框、下拉框与按钮布局，适配深色主题和窄窗口。详见 [说明](docs/releases/v0.4.16.md)。
 
 包含 **0.4.15 · 场景名称同步与 Windows 全步骤体验模板**：编辑器修改名称后，返回“我的场景”立即同步，并保留未保存的步骤草稿；可载入、编辑、删除与重新载入 Windows 体验模板，42 个步骤覆盖全部 32 种步骤类型。操作与验证详情见 [场景名称同步与体验模板](docs/SCENE-SYNC-AND-TEMPLATE.md)。包含 0.4.14 的 [QQ Secret 与场景编辑](docs/QQ-SECRET-AND-SCENE-EDITOR.md) 修复。
 
 已有功能包括 [应用内配置 Windows 自动登录](docs/IN-APP-AUTOLOGON.md)、[默认场景启动与中文输入录制](docs/STARTUP-TEXT-FIX.md)、[点击位置修复](docs/RECORDED-CLICK-FIX.md)、[窗口激活修复](docs/GUI-FOCUS-FIX.md)、[解锁前准备桌面应用](docs/DESKTOP-STARTUP.md)、[录制审阅修复](docs/RECORDING-REVIEW-FIX.md)、[关闭工作区应用](docs/WORKSPACE-CLOSE.md)、[应用图标](docs/APPLICATION-ICONS.md)、[预授权启动](docs/PREAUTHORIZED-LAUNCH.md) 和 [应用诊断日志](docs/APPLICATION-DIAGNOSTICS.md)。**从旧版本升级后，请在设置中允许默认场景自动执行，并重新录制此前漏掉的文本。**
 
-Windows x64 下载：[安装包](https://github.com/LiguoXia/LaunchFlow/releases/download/v0.4.16/LaunchFlow_0.4.16_x64-setup.exe) · [便携 ZIP](https://github.com/LiguoXia/LaunchFlow/releases/download/v0.4.16/LaunchFlow_0.4.16_windows-x64-portable.zip) · [发布说明与校验文件](https://github.com/LiguoXia/LaunchFlow/releases/tag/v0.4.16)。这是未签名的预发布验收版；更新器未配置，升级请手动下载安装包。
+已发布的 Windows x64 v0.4.19 下载：[安装包](https://github.com/LiguoXia/LaunchFlow/releases/download/v0.4.19/LaunchFlow_0.4.19_x64-setup.exe) · [便携 ZIP](https://github.com/LiguoXia/LaunchFlow/releases/download/v0.4.19/LaunchFlow_0.4.19_windows-x64-portable.zip) · [发布说明与校验文件](https://github.com/LiguoXia/LaunchFlow/releases/tag/v0.4.19)。这是未签名的预发布验收版；更新器未配置，升级请手动下载安装包。
 
-本地制品位于 `artifacts/form-polish/windows/`，该目录不提交到源码仓库。macOS 已提供 AX / ScreenCaptureKit / Vision / Keychain 原生实现，尚未在 Mac 实机编译或运行；不能视为跨平台验收已完成。当前没有标记为 V1 Release Candidate。
+本地 v0.4.19 制品位于 `artifacts/typography/windows/`，该目录不提交到源码仓库。macOS 已提供 AX / ScreenCaptureKit / Vision / Keychain 原生实现，尚未在 Mac 实机编译或运行；不能视为跨平台验收已完成。当前没有标记为 V1 Release Candidate。
 
 - [V1 Release Readiness Report](docs/V1-RELEASE-READINESS.md)
 - [签名与发行流程](docs/RELEASE.md)
@@ -69,11 +75,13 @@ node scripts/tauri.mjs build --target x86_64-apple-darwin --bundles app
 | `flow.join`      | 汇合有效分支                                                                                                  |
 | `flow.subflow`   | 调用场景快照，传参、返回子 Run ID / 节点输出，禁止递归引用                                                    |
 
-统一触发器：Manual、System Login、LaunchFlow Started、Schedule、Weekday、Global Hotkey、Network Available、Wi-Fi SSID、Monitor Changed、Power State。
+统一触发器：Manual、System Login、LaunchFlow Started、Cron、Schedule、Weekday、Global Hotkey、Network Available、Wi-Fi SSID、Monitor Changed、Power State。
 
 只有唯一默认场景能由 System Login 执行。登录启动仍需在设置中主动开启；关闭窗口隐藏到托盘，通过托盘退出。普通打开仅在显式配置 LaunchFlow Started 时自动执行。
 
-定时采用本地 HH:mm / 星期，应用需要保持运行；关闭期间不补跑。传感器每 5 秒观察一次，初次采样建立基线，状态变化时触发。网络以配置的 TCP 端点判断；显示器检测连接与布局变化；SSID 可能受系统定位权限限制。快捷键冲突会显示错误。
+定时采用本机时区，支持 HH:mm / 星期和 Cron 表达式；应用需要保持运行，关闭或休眠期间不补跑。Cron 支持 5 段（分 时 日 月 星期）或 6 段（秒 分 时 日 月 星期），独立每秒检查；场景设置显示接下来 3 次执行时间。传感器每 5 秒观察一次，初次采样建立基线，状态变化时触发。网络以配置的 TCP 端点判断；显示器检测连接与布局变化；SSID 可能受系统定位权限限制。快捷键冲突会显示错误。
+
+运行历史的“触发方式”列区分手动、快捷启动、系统登录、Cron、快捷键、传感器和恢复运行，并从本次运行的场景快照显示表达式等细节。
 
 ## 参数与命令
 
@@ -84,6 +92,8 @@ Secret Reference 接受 `vault:ID` 或 `env:NAME`。权限与凭据页面可创�
 命令使用程序 + 参数数组，不拼接 shell。执行脚本需显式选择 PowerShell、cmd、bash 等解释器。显式 shell 脚本自身仍有其解释语义。登录启动中的命令需要相应 Scene 授权。命令输出默认关闭，启用后 stdout / stderr 各最多保留 64 KiB。不要把凭据填入普通参数；常见凭据字面量会被拒绝，任意无标记或编码后的秘密无法可靠识别。
 
 ## 工作区与迁移
+
+「应用库」可捕获当前桌面窗口所属应用，Windows 还可捕获内置常用应用及当前默认浏览器、邮件、图片、音乐、视频、PDF 和文本应用。捕获后勾选添加；已有应用勾选置灰，重复项合并，原应用配置保留。详见 [应用捕获说明](docs/CRON-AND-APPLICATION-CAPTURE.md)。
 
 在「工作区」捕获可见窗口，勾选应用、调整启动顺序，选择 Relative（默认）或 Exact 布局后创建场景。也可向已有工作区场景添加 Office / Home / Laptop 布局，按显示器数量与名称匹配。显示器匹配按稳定 ID、相似规格、主副角色、主屏回退；矩形始终限制在当前工作区可达范围内。相同应用的多个窗口需要稳定标题才能区分，启动应用不会自动重建项目、标签页或文档。
 
@@ -119,6 +129,8 @@ node scripts/tauri.mjs build --debug --no-bundle
 npm run test:phase2
 npm run test:gui
 npm run test:recorder
+npm run test:cron-capture
+npm run test:scene-organization
 node scripts/cargo.mjs test -p launchflow-core --test automation_native -- --ignored
 ```
 
@@ -126,4 +138,4 @@ node scripts/cargo.mjs test -p launchflow-core --test automation_native -- --ign
 
 可选 `LAUNCHFLOW_PHASE1_AUDIT=1` 增加原生文件/目录/URL 打开与隔离登录注册检查；`LAUNCHFLOW_REAL_APPS=1` 增加本机已绑定 Clash、Docker、IDEA、Chrome 的实际启动验收，路径在 `scripts/real-app-acceptance.mjs`。本机没有 DataGrip，真实应用流程禁用该节点；三路并行由独立测试进程验证。
 
-数据库位于 Tauri 应用数据目录 `launchflow.db`。SQLite 升级到版本 2；Scene schema 仍为兼容的版本 1。保留场景版本、草稿和历史，异常退出的活动运行标为 Interrupted，不自动重放。详细限制及后续验收门槛见完成报告。
+数据库位于 Tauri 应用数据目录 `launchflow.db`。SQLite 当前版本为 4；Scene schema 仍为兼容的版本 1。保留场景版本、草稿和历史，异常退出的活动运行标为 Interrupted，不自动重放。详细限制及后续验收门槛见完成报告。

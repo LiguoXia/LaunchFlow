@@ -11,22 +11,27 @@
   --space-4: 16px;
   --space-6: 24px;
   --space-8: 32px;
-  --type-caption: 12px;
-  --type-small: 13px;
-  --type-body: 14px;
-  --type-subtitle: 16px;
-  --type-heading: 20px;
-  --type-title: 24px;
+  --font-ui:
+    'Microsoft YaHei UI', 'Microsoft YaHei', 'Segoe UI', 'PingFang SC', system-ui, sans-serif;
+  --font-mono: 'Cascadia Code', Consolas, 'Microsoft YaHei UI', 'PingFang SC', monospace;
+  --type-caption: 13px;
+  --type-small: 14px;
+  --type-body: 15px;
+  --type-subtitle: 18px;
+  --type-heading: 22px;
+  --type-title: 28px;
   --duration-fast: 140ms;
   --duration-normal: 220ms;
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --shadow: 0 4px 16px #193e2810;
 }
 :root[data-platform='windows'] {
-  font-family: 'Segoe UI', 'Microsoft YaHei', system-ui, sans-serif;
+  --font-ui:
+    'Microsoft YaHei UI', 'Microsoft YaHei', 'Segoe UI Variable Text', 'Segoe UI', system-ui,
+    sans-serif;
 }
 :root[data-platform='macos'] {
-  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif;
+  --font-ui: -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif;
 }
 .main-shell {
   background: var(--bg);

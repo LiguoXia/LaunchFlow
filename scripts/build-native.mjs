@@ -68,6 +68,7 @@ if (process.platform === 'win32') {
     'TaskAuthorization.cs',
     'ApplicationTrace.cs',
     'ApplicationIcons.cs',
+    'ApplicationDiscovery.cs',
     'Startup.cs',
     'AutoLogon.cs',
     'AutoLogonDialog.cs',

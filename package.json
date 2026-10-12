@@ -1,6 +1,6 @@
 {
   "name": "launchflow",
-  "version": "0.4.16",
+  "version": "0.4.19",
   "private": true,
   "type": "module",
   "scripts": {
@@ -31,6 +31,8 @@
     "test:recorded-secret": "node scripts/recorded-secret-smoke.mjs",
     "test:scene-editor": "node scripts/scene-editor-smoke.mjs",
     "test:scene-template": "node scripts/scene-template-smoke.mjs",
+    "test:scene-organization": "node scripts/scene-organization-smoke.mjs",
+    "test:cron-capture": "node scripts/cron-capture-smoke.mjs",
     "test:autologon": "node scripts/test-autologon.mjs",
     "test:workspace-close-admin": "node scripts/test-workspace-close-elevation.mjs",
     "release:check": "node scripts/release-preflight.mjs"

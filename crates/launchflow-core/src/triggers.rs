@@ -1,4 +1,4 @@
-//! All trigger decisions live in Rust. Polling is bounded to five seconds; UI uses events.
+//! Trigger decisions live in Rust. Cron polls each second; sensors poll every five seconds.
 use crate::{
     engine::Engine,
     model::*,
@@ -39,6 +39,7 @@ pub struct TriggerEvent {
 #[derive(Default, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields, default)]
 struct Config {
+    expression: String,
     time: String,
     days: Vec<u32>,
     shortcut: String,
@@ -82,6 +83,9 @@ impl TriggerProvider for Builtin {
     fn validate(&self, t: &Trigger) -> Result<()> {
         let c: Config = serde_json::from_value(t.config.clone())?;
         match self.kind {
+            "cron" => {
+                crate::cron_schedule::parse(&c.expression)?;
+            }
             "schedule" | "weekday" => {
                 parse_time(&c.time)?;
                 if self.kind == "weekday"
@@ -118,6 +122,10 @@ impl TriggerProvider for Builtin {
     ) -> Result<Option<Observation>> {
         let c: Config = serde_json::from_value(t.config.clone())?;
         let (value, fire, scheduled) = match self.kind {
+            "cron" => {
+                let (slot, matches) = crate::cron_schedule::observation(&c.expression, now)?;
+                (slot, matches, true)
+            }
             "schedule" | "weekday" => {
                 let time = parse_time(&c.time)?;
                 let fire = now.hour() == time.hour()
@@ -160,6 +168,12 @@ impl Default for TriggerRegistry {
         };
         for (kind, name, defaults, description) in [
             ("manual", "手动运行", json!({}), "从界面或托盘启动"),
+            (
+                "cron",
+                "Cron 定时",
+                json!({"expression":"0 9 * * MON-FRI"}),
+                "本机时区；支持 5 段或含秒的 6 段表达式，应用关闭或休眠期间不补发",
+            ),
             (
                 "systemLogin",
                 "系统登录",
@@ -381,7 +395,7 @@ impl TriggerEngine {
                 "Only the default scene may run at system login".into(),
             ));
         }
-        let result = self.engine.start_with_parameters(
+        let result = self.engine.start_authorized_with_trigger(
             scene_id,
             if t.kind == "systemLogin" {
                 "startup"
@@ -389,6 +403,8 @@ impl TriggerEngine {
                 &t.kind
             },
             t.parameters.clone(),
+            false,
+            Some(&t.id),
         );
         match &result {
             Ok(r) => self.report(scene_id, trigger_id, "fired", &format!("Run {}", r.id)),
@@ -470,6 +486,9 @@ impl TriggerEngine {
         result
     }
     pub async fn poll_at(&self, clock: DateTime<Local>) -> Result<()> {
+        self.poll_inner(clock, None).await
+    }
+    async fn poll_inner(&self, clock: DateTime<Local>, cron_only: Option<bool>) -> Result<()> {
         let scenes = self
             .scenes
             .read()
@@ -477,6 +496,9 @@ impl TriggerEngine {
             .clone();
         for scene in scenes {
             for t in scene.triggers.iter().filter(|t| t.enabled) {
+                if cron_only.is_some_and(|only| only != (t.kind == "cron")) {
+                    continue;
+                }
                 let provider = self.registry.provider(&t.kind)?;
                 let key = format!("{}:{}:{}", scene.id, t.id, t.config);
                 let observed = match provider
@@ -511,13 +533,27 @@ impl TriggerEngine {
         Ok(())
     }
     pub fn start(self: &Arc<Self>, cancel: CancellationToken) {
-        let this = self.clone();
-        tokio::spawn(async move {
-            let mut interval = tokio::time::interval(Duration::from_secs(5));
-            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-            loop {
-                tokio::select! {_=cancel.cancelled()=>break,_=interval.tick()=>{tokio::select!{_=cancel.cancelled()=>break,result=this.poll_at(Local::now())=>{if let Err(e)=result{this.report("","engine","error",&e.to_string());}}}}}
-            }
-        });
+        // Network and desktop sensor I/O cannot block the seconds-based cron clock.
+        for (cron_only, period) in [(true, 1), (false, 5)] {
+            let this = self.clone();
+            let cancel = cancel.clone();
+            tokio::spawn(async move {
+                let mut interval = tokio::time::interval(Duration::from_secs(period));
+                interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+                loop {
+                    tokio::select! {
+                        _ = cancel.cancelled() => break,
+                        _ = interval.tick() => {
+                            tokio::select! {
+                                _ = cancel.cancelled() => break,
+                                result = this.poll_inner(Local::now(), Some(cron_only)) => {
+                                    if let Err(e) = result { this.report("", "engine", "error", &e.to_string()); }
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
     }
 }

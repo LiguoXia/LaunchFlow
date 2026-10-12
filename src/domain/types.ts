@@ -135,6 +135,7 @@ export interface Run {
   sceneSnapshot: Scene;
   status: RunStatus;
   source: string;
+  triggerId?: string | null;
   startedAt: string;
   endedAt: string | null;
   durationMs: number;
@@ -170,10 +171,15 @@ export interface ValidationIssue {
   nodeId: string | null;
   message: string;
 }
+export interface ScenePreferences {
+  order: string[];
+  quickLaunchIds: string[];
+}
 export interface Bootstrap {
   triggerDefinitions: TriggerDefinition[];
   triggerStatuses: TriggerEvent[];
   scenes: Scene[];
+  scenePreferences: ScenePreferences;
   profiles: ApplicationProfile[];
   runs: Run[];
   settings: Settings;

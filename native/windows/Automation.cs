@@ -593,6 +593,7 @@ namespace LaunchFlow.Native
             if (op == "desktopStartupConditions") return DesktopStartup.Conditions();
             if (op == "configureAutologon") return AutoLogonDialog.Request();
             if (op == "applicationIcons") return ApplicationIcons.ReadBatch(request);
+            if (op == "applicationDiscover") return ApplicationDiscovery.Discover(request);
             if (op == "vault") return Vault.Dispatch(request);
             if (op == "displays") return WorkspaceDesktop.Displays();
             if (op == "workspaceCloseCapture") return WorkspaceClose.Capture(request);

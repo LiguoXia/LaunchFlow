@@ -1,9 +1,49 @@
 use crate::{model::*, Error, Result};
 use rusqlite::{params, Connection, OptionalExtension};
 use std::{
+    collections::BTreeSet,
     path::Path,
     sync::{Mutex, MutexGuard},
 };
+
+/// Local presentation preferences, deliberately separate from portable scene documents.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScenePreferences {
+    pub order: Vec<String>,
+    pub quick_launch_ids: Vec<String>,
+}
+
+fn read_scene_preferences(conn: &Connection) -> Result<ScenePreferences> {
+    let mut statement = conn.prepare(
+        "SELECT scene_id,quick_launch FROM scene_preferences ORDER BY position,scene_id",
+    )?;
+    let rows = statement.query_map([], |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, bool>(1)?))
+    })?;
+    let mut preferences = ScenePreferences {
+        order: Vec::new(),
+        quick_launch_ids: Vec::new(),
+    };
+    for row in rows {
+        let (id, quick_launch) = row?;
+        if quick_launch {
+            preferences.quick_launch_ids.push(id.clone());
+        }
+        preferences.order.push(id);
+    }
+    Ok(preferences)
+}
+
+fn append_scene_preference(conn: &Connection, scene_id: &str) -> Result<()> {
+    conn.execute(
+        "INSERT INTO scene_preferences(scene_id,position,quick_launch)
+         VALUES(?1,(SELECT COALESCE(MAX(position),-1)+1 FROM scene_preferences),0)
+         ON CONFLICT(scene_id) DO NOTHING",
+        [scene_id],
+    )?;
+    Ok(())
+}
 
 pub struct Store {
     connection: Mutex<Connection>,
@@ -19,7 +59,7 @@ impl Store {
         connection.busy_timeout(std::time::Duration::from_secs(5))?;
         connection.execute_batch("PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL;")?;
         let version: u32 = connection.query_row("PRAGMA user_version", [], |r| r.get(0))?;
-        if version > 3 {
+        if version > 4 {
             return Err(Error::Validation(
                 "Database was created by a newer LaunchFlow version".into(),
             ));
@@ -47,6 +87,18 @@ impl Store {
         if version < 3 {
             connection.execute_batch("BEGIN IMMEDIATE; CREATE TABLE workspace_close_preferences(key TEXT PRIMARY KEY, value TEXT NOT NULL); PRAGMA user_version=3; COMMIT;")?;
         }
+        if version < 4 {
+            connection.execute_batch(
+                "BEGIN IMMEDIATE;
+                CREATE TABLE scene_preferences(
+                    scene_id TEXT PRIMARY KEY REFERENCES scenes(id) ON DELETE CASCADE,
+                    position INTEGER NOT NULL,
+                    quick_launch INTEGER NOT NULL DEFAULT 0 CHECK(quick_launch IN (0,1)));
+                INSERT INTO scene_preferences(scene_id,position,quick_launch)
+                    SELECT id,ROW_NUMBER() OVER(ORDER BY updated_at DESC,id)-1,0 FROM scenes;
+                PRAGMA user_version=4; COMMIT;",
+            )?;
+        }
         Ok(Self {
             connection: Mutex::new(connection),
         })
@@ -58,12 +110,13 @@ impl Store {
     }
     pub fn claim_trigger(&self, key: &str, occurrence: &str) -> Result<bool> {
         Ok(self.lock()?.execute("INSERT INTO trigger_firings(trigger_key,occurrence) VALUES(?1,?2)
-            ON CONFLICT(trigger_key) DO UPDATE SET occurrence=excluded.occurrence WHERE occurrence != excluded.occurrence", params![key, occurrence])? > 0)
+            ON CONFLICT(trigger_key) DO UPDATE SET occurrence=excluded.occurrence WHERE occurrence < excluded.occurrence", params![key, occurrence])? > 0)
     }
     pub fn scenes(&self) -> Result<Vec<Scene>> {
         let conn = self.lock()?;
         let mut stmt = conn.prepare(
-            "SELECT document,is_default FROM scenes ORDER BY is_default DESC,updated_at DESC",
+            "SELECT s.document,s.is_default FROM scenes s
+             JOIN scene_preferences p ON p.scene_id=s.id ORDER BY p.position,s.id",
         )?;
         let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, bool>(1)?)))?;
         rows.map(|row| {
@@ -73,6 +126,51 @@ impl Store {
             Ok(scene)
         })
         .collect()
+    }
+    pub fn scene_preferences(&self) -> Result<ScenePreferences> {
+        let conn = self.lock()?;
+        read_scene_preferences(&conn)
+    }
+    pub fn reorder_scenes(&self, scene_ids: &[String]) -> Result<ScenePreferences> {
+        let mut conn = self.lock()?;
+        let tx = conn.transaction()?;
+        let current = read_scene_preferences(&tx)?;
+        let requested: BTreeSet<_> = scene_ids.iter().collect();
+        if scene_ids.len() != current.order.len()
+            || requested.len() != scene_ids.len()
+            || requested != current.order.iter().collect()
+        {
+            return Err(Error::Validation(
+                "场景列表已变化，请刷新后重新排序。".into(),
+            ));
+        }
+        for (position, id) in scene_ids.iter().enumerate() {
+            tx.execute(
+                "UPDATE scene_preferences SET position=?2 WHERE scene_id=?1",
+                params![id, position as i64],
+            )?;
+        }
+        let preferences = read_scene_preferences(&tx)?;
+        tx.commit()?;
+        Ok(preferences)
+    }
+    pub fn set_scene_quick_launch(
+        &self,
+        scene_id: &str,
+        enabled: bool,
+    ) -> Result<ScenePreferences> {
+        let mut conn = self.lock()?;
+        let tx = conn.transaction()?;
+        if tx.execute(
+            "UPDATE scene_preferences SET quick_launch=?2 WHERE scene_id=?1",
+            params![scene_id, enabled],
+        )? == 0
+        {
+            return Err(Error::Validation("Scene not found".into()));
+        }
+        let preferences = read_scene_preferences(&tx)?;
+        tx.commit()?;
+        Ok(preferences)
     }
     pub fn scene(&self, id: &str) -> Result<Scene> {
         self.scenes()?
@@ -117,6 +215,7 @@ impl Store {
         tx.execute("INSERT INTO scenes(id,name,version,is_default,document,updated_at) VALUES(?1,?2,?3,?4,?5,?6)
             ON CONFLICT(id) DO UPDATE SET name=excluded.name,version=excluded.version,document=excluded.document,updated_at=excluded.updated_at",
             params![scene.id, scene.name.trim(), scene.version, scene.is_default, json, scene.updated_at])?;
+        append_scene_preference(&tx, &scene.id)?;
         tx.execute(
             "INSERT INTO scene_versions(scene_id,version,document) VALUES(?1,?2,?3)",
             params![scene.id, scene.version, json],
@@ -276,6 +375,7 @@ impl Store {
         for scene in &scenes {
             let document = serde_json::to_string(scene)?;
             tx.execute("INSERT INTO scenes(id,name,version,is_default,document,updated_at) VALUES(?1,?2,1,0,?3,?4)",params![scene.id,scene.name,document,scene.updated_at])?;
+            append_scene_preference(&tx, &scene.id)?;
             tx.execute(
                 "INSERT INTO scene_versions(scene_id,version,document) VALUES(?1,1,?2)",
                 params![scene.id, document],
@@ -297,6 +397,52 @@ impl Store {
         self.lock()?.execute("INSERT INTO application_profiles(id,document) VALUES(?1,?2) ON CONFLICT(id) DO UPDATE SET document=excluded.document",
             params![profile.id, serde_json::to_string(profile)?])?;
         Ok(())
+    }
+    /// A checked capture is added atomically. Existing bindings are never overwritten.
+    pub fn add_discovered_profiles(
+        &self,
+        profiles: &[ApplicationProfile],
+        os: &str,
+    ) -> Result<usize> {
+        if profiles.is_empty() || profiles.len() > 256 {
+            return Err(Error::Validation("请选择 1–256 个应用。".into()));
+        }
+        for p in profiles {
+            crate::validation::validate_profile(p)?;
+            crate::safety::check_storage_values(p)?;
+            if crate::application_discovery::identity(p, os).is_empty() {
+                return Err(Error::Validation("应用缺少可启动路径。".into()));
+            }
+        }
+        let mut conn = self.lock()?;
+        let tx = conn.transaction()?;
+        let mut keys = {
+            let mut stmt = tx.prepare("SELECT document FROM application_profiles")?;
+            let rows = stmt.query_map([], |r| r.get::<_, String>(0))?;
+            let mut keys = BTreeSet::new();
+            for row in rows {
+                keys.insert(crate::application_discovery::identity(
+                    &serde_json::from_str::<ApplicationProfile>(&row?)?,
+                    os,
+                ));
+            }
+            keys
+        };
+        let mut added = 0;
+        for profile in profiles {
+            if !keys.insert(crate::application_discovery::identity(profile, os)) {
+                continue;
+            }
+            let mut profile = profile.clone();
+            profile.id = id();
+            tx.execute(
+                "INSERT INTO application_profiles(id,document) VALUES(?1,?2)",
+                params![profile.id, serde_json::to_string(&profile)?],
+            )?;
+            added += 1;
+        }
+        tx.commit()?;
+        Ok(added)
     }
     pub fn delete_profile(&self, id: &str) -> Result<()> {
         fn references(value: &serde_json::Value, id: &str) -> bool {

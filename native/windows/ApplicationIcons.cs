@@ -21,21 +21,36 @@ namespace LaunchFlow.Native
         }
         [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
         static extern IntPtr SHGetFileInfo(string path, uint attributes, ref FileInfo info, uint size, uint flags);
+        [DllImport("shell32.dll", CharSet=CharSet.Unicode, EntryPoint="SHGetFileInfoW")]
+        static extern IntPtr SHGetItemInfo(IntPtr pidl, uint attributes, ref FileInfo info, uint size, uint flags);
+        [DllImport("shell32.dll", CharSet=CharSet.Unicode)]
+        static extern int SHParseDisplayName(string name, IntPtr context, out IntPtr pidl, uint flags, out uint attributes);
         [DllImport("user32.dll")]
         static extern bool DestroyIcon(IntPtr icon);
 
         static object Read(Dictionary<string, object> source)
         {
             var info = new FileInfo();
+            IntPtr pidl = IntPtr.Zero;
             try
             {
                 string path = Wire.Str(source, "path");
+                if (path.StartsWith("shell:AppsFolder\\", StringComparison.Ordinal)) {
+                    string id = path.Substring(17);
+                    if (!System.Text.RegularExpressions.Regex.IsMatch(id, "^[A-Za-z0-9_.!-]+$")) return null;
+                    uint attributes;
+                    if(SHParseDisplayName(path, IntPtr.Zero, out pidl, 0, out attributes) != 0) return null;
+                    if(SHGetItemInfo(pidl, 0, ref info, (uint)Marshal.SizeOf(info), 0x108) == IntPtr.Zero || info.icon == IntPtr.Zero) return null;
+                    // Cache against the shell host with the distinct AppsFolder cache key.
+                    path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "explorer.exe");
+                } else {
                 if (path.Length < 3 || !Char.IsLetter(path[0]) || path[1] != ':' ||
                     (path[2] != '\\' && path[2] != '/') || !File.Exists(path)) return null;
                 path = Path.GetFullPath(path);
                 if (new DriveInfo(Path.GetPathRoot(path)).DriveType == DriveType.Network) return null;
                 if (SHGetFileInfo(path, 0, ref info, (uint)Marshal.SizeOf(info), 0x100) == IntPtr.Zero ||
                     info.icon == IntPtr.Zero) return null;
+                }
                 using (var icon = Icon.FromHandle(info.icon))
                 using (var bitmap = icon.ToBitmap())
                 using (var stream = new MemoryStream())
@@ -45,7 +60,7 @@ namespace LaunchFlow.Native
                 }
             }
             catch { return null; }
-            finally { if (info.icon != IntPtr.Zero) DestroyIcon(info.icon); }
+            finally { if (info.icon != IntPtr.Zero) DestroyIcon(info.icon); if(pidl != IntPtr.Zero) Marshal.FreeCoTaskMem(pidl); }
         }
         public static object ReadBatch(Dictionary<string, object> request)
         {
