@@ -42,7 +42,7 @@ function request(worker, value) {
   return response.result;
 }
 function verifyMacBinary(path) {
-  execFileSync('lipo', ['-verify_arch', platform.arch, path], { stdio: 'inherit' });
+  execFileSync('lipo', [path, '-verify_arch', platform.arch], { stdio: 'inherit' });
   execFileSync('codesign', ['--verify', '--strict', path], { stdio: 'inherit' });
 }
 async function checkStartup(binary) {
