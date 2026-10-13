@@ -6,6 +6,7 @@ pub mod cron_schedule;
 pub mod diagnostics;
 pub mod engine;
 pub mod model;
+pub mod once_schedule;
 pub mod parameters;
 pub mod platform;
 pub mod policy;

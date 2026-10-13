@@ -13,6 +13,7 @@ export function runSource(
     systemLogin: '系统登录',
     appStarted: 'LaunchFlow 启动',
     cron: 'Cron 定时',
+    once: '指定时间',
     schedule: '每日定时',
     weekday: '每周定时',
     globalHotkey: '全局快捷键',
@@ -33,6 +34,7 @@ export function runSource(
   const config = trigger?.config ?? {};
   let detail = '';
   if (run.source === 'cron') detail = String(config.expression ?? '');
+  if (run.source === 'once') detail = String(config.dateTime ?? '');
   if (['schedule', 'weekday'].includes(run.source)) {
     detail = String(config.time ?? '');
     if (run.source === 'weekday' && Array.isArray(config.days))

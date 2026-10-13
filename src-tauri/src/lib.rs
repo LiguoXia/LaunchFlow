@@ -340,6 +340,10 @@ async fn run_scene(
     ))
 }
 #[tauri::command]
+fn once_schedule_preview(date_time: String) -> ApiResult<String> {
+    api(launchflow_core::once_schedule::parse(&date_time).map(|date| date.to_rfc3339()))
+}
+#[tauri::command]
 async fn cron_preview(expression: String) -> ApiResult<Vec<String>> {
     tauri::async_runtime::spawn_blocking(move || {
         api(launchflow_core::cron_schedule::preview(&expression))
@@ -692,6 +696,7 @@ pub fn run() {
             application_authorization_change,
             run_scene,
             cron_preview,
+            once_schedule_preview,
             stop_run,
             pause_run,
             resume_run,

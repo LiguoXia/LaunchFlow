@@ -110,7 +110,7 @@ if (process.platform === 'win32') {
     );
   }
 } else if (process.platform === 'darwin') {
-  for (const name of ['automation', 'harness'])
+  for (const name of ['automation', 'harness']) {
     execFileSync(
       'xcrun',
       [
@@ -138,4 +138,8 @@ if (process.platform === 'win32') {
       ],
       { stdio: 'inherit' },
     );
+    execFileSync('codesign', ['--force', '--sign', '-', join(out, `launchflow-${name}`)], {
+      stdio: 'inherit',
+    });
+  }
 } else throw new Error('Native automation supports Windows and macOS.');

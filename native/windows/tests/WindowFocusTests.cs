@@ -4,7 +4,8 @@ using LaunchFlow.Native;
 class FakeFocus : FocusDesktop
 {
     public long Now;
-    public int Requests, Restores;
+    public int Requests, Restores, Shows;
+    public long ShownAt = 0;
     public long ActivatedAt = 400, RestoredAt = 0, DisappearedAt = long.MaxValue;
     public bool Accepted = true;
     public IntPtr Current = new IntPtr(22);
@@ -12,9 +13,11 @@ class FakeFocus : FocusDesktop
     public override long Milliseconds { get { return Now; } }
     public override bool Exists(IntPtr h) { return Now < DisappearedAt; }
     public override bool Minimized(IntPtr h) { return Now < RestoredAt; }
+    public override bool Visible(IntPtr h) { return Now >= ShownAt; }
     public override IntPtr Foreground() { return Now >= ActivatedAt ? new IntPtr(11) : Current; }
     public override IntPtr Root(IntPtr h) { return h == Current ? CurrentRoot : h; }
     public override void Restore(IntPtr h) { Restores++; }
+    public override void Show(IntPtr h) { Shows++; }
     public override bool Request(IntPtr h) { Requests++; return Accepted; }
     public override void Pause() { Now += 25; }
 }
@@ -38,6 +41,16 @@ class WindowFocusTests
         d = new FakeFocus { RestoredAt = 300, ActivatedAt = 700 };
         WindowFocus.Activate(Target, d);
         Check(d.Restores == 1 && d.Requests == 1 && d.Now == 700, "Restore minimized window asynchronously before activation");
+        d = new FakeFocus { ShownAt = 300, ActivatedAt = 700 };
+        WindowFocus.Activate(Target, d);
+        Check(d.Shows == 1 && d.Restores == 0 && d.Requests == 1 && d.Now == 700,
+            "Show hidden tray window before activation without resetting normal/maximized placement");
+        d = new FakeFocus { ShownAt = long.MaxValue, ActivatedAt = 0 };
+        failure = Failure(() => WindowFocus.Activate(Target, d));
+        Check(failure.Code == "focusDenied" && d.Shows == 1 && d.Requests == 0 && d.Now == 2000,
+            "A hidden window cannot succeed merely because its stale handle is foreground");
+        failure = Failure(() => WindowFocus.BeforeInput(Target, d));
+        Check(failure.Code == "focusDenied", "Hidden targets never receive keyboard input");
         d = new FakeFocus { ActivatedAt = 0 };
         WindowFocus.Activate(Target, d);
         Check(d.Requests == 0 && d.Restores == 0 && d.Now == 0, "Already focused or maximized window keeps its state");

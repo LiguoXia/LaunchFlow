@@ -12,9 +12,11 @@ namespace LaunchFlow.Native
         public virtual long Milliseconds { get { return clock.ElapsedMilliseconds; } }
         public virtual bool Exists(IntPtr h) { return Win.IsWindow(h); }
         public virtual bool Minimized(IntPtr h) { return Win.IsIconic(h); }
+        public virtual bool Visible(IntPtr h) { return Win.IsWindowVisible(h); }
         public virtual IntPtr Foreground() { return Win.GetForegroundWindow(); }
         public virtual IntPtr Root(IntPtr h) { return Win.GetAncestor(h, 2); }
         public virtual void Restore(IntPtr h) { Win.ShowWindowAsync(h, 9); }
+        public virtual void Show(IntPtr h) { Win.ShowWindowAsync(h, 5); }
         public virtual bool Request(IntPtr h) { return Win.SetForegroundWindow(h); }
         public virtual void Pause() { Thread.Sleep(25); }
     }
@@ -31,16 +33,18 @@ namespace LaunchFlow.Native
         public static void Activate(IntPtr h, FocusDesktop desktop)
         {
             long start = desktop.Milliseconds;
-            bool restored = false, requested = false, accepted = false;
+            bool restored = false, shown = false, requested = false, accepted = false;
             while (true)
             {
                 bool present = h != IntPtr.Zero && desktop.Exists(h);
                 bool minimized = present && desktop.Minimized(h);
-                bool matched = present && !minimized && Matches(h, desktop);
+                bool visible = present && desktop.Visible(h);
+                bool matched = present && visible && !minimized && Matches(h, desktop);
                 long elapsed = desktop.Milliseconds - start;
                 LastDiagnostic = Wire.Obj("stage", matched ? "foregroundConfirmed" : "foregroundWait",
                     "elapsedMs", elapsed, "restoreRequested", restored, "activationRequested", requested,
-                    "requestAccepted", accepted, "foregroundMatched", matched, "targetPresent", present);
+                    "requestAccepted", accepted, "foregroundMatched", matched, "targetPresent", present,
+                    "hiddenRestoreRequested", shown, "targetVisible", visible);
                 if (!present)
                 {
                     LastDiagnostic["stage"] = "windowUnavailable";
@@ -49,13 +53,14 @@ namespace LaunchFlow.Native
                 if (matched) return;
                 if (elapsed >= 2000)
                 {
-                    LastDiagnostic["stage"] = minimized ? "restoreTimeout" : "foregroundTimeout";
+                    LastDiagnostic["stage"] = !visible ? "showTimeout" : minimized ? "restoreTimeout" : "foregroundTimeout";
                     throw new NativeFailure("focusDenied",
                         "The target window did not become foreground within 2 seconds; input was not sent. Bring the target app forward and retry.", LastDiagnostic);
                 }
                 // Restoring an already maximized window changes its layout and invalidates recorded coordinates.
-                if (minimized && !restored) { desktop.Restore(h); restored = true; }
-                if (!minimized && !requested) { accepted = desktop.Request(h); requested = true; }
+                if (!visible && !shown) { desktop.Show(h); shown = true; }
+                if (visible && minimized && !restored) { desktop.Restore(h); restored = true; }
+                if (visible && !minimized && !requested) { accepted = desktop.Request(h); requested = true; }
                 // SetForegroundWindow can return before the other thread processes its activation message.
                 desktop.Pause();
             }
@@ -64,7 +69,7 @@ namespace LaunchFlow.Native
         public static void BeforeInput(IntPtr h, FocusDesktop desktop)
         {
             bool present = h != IntPtr.Zero && desktop.Exists(h);
-            bool matched = present && !desktop.Minimized(h) && Matches(h, desktop);
+            bool matched = present && desktop.Visible(h) && !desktop.Minimized(h) && Matches(h, desktop);
             if (matched) return;
             var detail = LastDiagnostic == null ? Wire.Obj() : new Dictionary<string, object>(LastDiagnostic);
             detail["stage"] = "beforeInput";

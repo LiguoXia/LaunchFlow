@@ -22,11 +22,22 @@ namespace LaunchFlow.Native
     }
     public static class Desktop
     {
-        public static IEnumerable<IntPtr> Windows()
+        public static bool RestorableHiddenWindow(IntPtr h)
+        {
+            // Tray apps retain a normal top-level main window. Never surface tool,
+            // child, owned or no-activate helper windows merely because they have a title.
+            uint style = unchecked((uint)Win.GetWindowLong(h, -16));
+            uint extended = unchecked((uint)Win.GetWindowLong(h, -20));
+            return !Win.IsWindowVisible(h) && Win.GetWindow(h, 4) == IntPtr.Zero &&
+                (style & 0x40000000) == 0 && (extended & (0x80 | 0x08000000)) == 0 &&
+                ((style & 0x00C00000) == 0x00C00000 || (style & 0x00080000) != 0);
+        }
+        public static IEnumerable<IntPtr> Windows(bool includeHidden = false)
         {
             var result = new List<IntPtr>();
             Win.EnumWindows(delegate(IntPtr h, IntPtr _) {
-                if (Win.IsWindowVisible(h) && Win.Title(h) != "" && !Win.Class(h).StartsWith("LaunchFlowOverlay"))
+                if ((Win.IsWindowVisible(h) || includeHidden && RestorableHiddenWindow(h)) &&
+                    Win.Title(h) != "" && !Win.Class(h).StartsWith("LaunchFlowOverlay"))
                     result.Add(h);
                 return true;
             }, IntPtr.Zero);
@@ -45,7 +56,7 @@ namespace LaunchFlow.Native
             {
             }
             return Wire.Obj("handle", h.ToInt64().ToString(), "pid", pid, "application", app, "title", Win.Title(h),
-                            "className", Win.Class(h), "bounds", Win.Bounds(h), "state",
+                            "className", Win.Class(h), "bounds", Win.Bounds(h), "visible", Win.IsWindowVisible(h), "state",
                             Win.IsIconic(h)   ? "minimized"
                             : Win.IsZoomed(h) ? "maximized"
                                               : "normal",
@@ -62,13 +73,14 @@ namespace LaunchFlow.Native
             }
             return Wire.Num(scope, "pid") == 0 || Wire.Num(scope, "pid") == Wire.Num(info, "pid");
         }
-        public static IntPtr FindWindow(Dictionary<string, object> scope)
+        public static IntPtr FindWindow(Dictionary<string, object> scope, bool includeHidden = false)
         {
-            if (scope.Count == 0)
+            if (!new[] { "application", "title", "className", "handle" }.Any(key => Wire.Str(scope, key) != "") && Wire.Num(scope, "pid") == 0)
                 throw new NativeFailure("invalidLocator", "A target application/window is required.");
-            var found = Windows().Where(h => WindowMatches(h, scope)).ToList();
+            var found = Windows(includeHidden).Where(h => WindowMatches(h, scope)).ToList();
             if (found.Count == 0)
-                throw new NativeFailure("notFound", "Target window is unavailable.");
+                throw new NativeFailure("notFound", includeHidden ?
+                    "未找到可恢复的应用主窗口。请确认应用仍在运行；若关闭窗口后只保留后台进程，请先用启动应用步骤打开主窗口。" : "Target window is unavailable.");
             if (found.Count > 1)
                 throw new NativeFailure("ambiguous",
                                         "Window selector matched more than one window; add title or class.");
@@ -160,7 +172,9 @@ namespace LaunchFlow.Native
         }
         public static bool Match(AutomationElement e, Dictionary<string, object> attrs)
         {
-            var actual = Attributes(e);
+            var actual = StableAttributes(Attributes(e));
+            // Also normalize old saved locators; users need not re-record after upgrading.
+            attrs = StableAttributes(attrs, Wire.Str(actual, "frameworkId") == "Chrome");
             if (Wire.Bool(attrs, "secure") && !Wire.Bool(actual, "secure")) return false;
             foreach (var key in new[] { "role", "name", "automationId", "className", "frameworkId" })
             {
@@ -169,6 +183,22 @@ namespace LaunchFlow.Native
                     return false;
             }
             return true;
+        }
+        public static Dictionary<string, object> StableAttributes(Dictionary<string, object> attrs, bool chromiumContext = false)
+        {
+            var stable = new Dictionary<string, object>(attrs);
+            var framework = Wire.Str(attrs, "frameworkId");
+            if (!String.Equals(framework, "Chrome", StringComparison.OrdinalIgnoreCase) && !(framework == "" && chromiumContext))
+                return stable;
+            // React useId is a render/session identity, not a persistent DOM selector.
+            // Keep explicit IDs, role, framework and the rest of the ancestor constraints.
+            if (System.Text.RegularExpressions.Regex.IsMatch(Wire.Str(attrs, "automationId"),
+                @"^(?:_[rR]_[A-Za-z0-9]+_|:[rR][A-Za-z0-9]+:)$"))
+                stable["automationId"] = "";
+            var classes = Wire.Str(attrs, "className").Split(new[] { ' ', '\t', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+            if (classes.Contains("ProseMirror"))
+                stable["className"] = String.Join(" ", classes.Where(c => c != "ProseMirror-focused" && c != "ProseMirror-hideselection"));
+            return stable;
         }
         public static bool MatchAncestors(AutomationElement e, object raw)
         {
@@ -604,7 +634,7 @@ namespace LaunchFlow.Native
                 return Wire.Obj("accessibility", "granted", "screenRecording", "granted", "automation", "notRequired",
                                 "inputMonitoring", "granted");
             if (op == "windows")
-                return Windows().Select(WindowInfo).ToArray();
+                return Windows(Wire.Bool(request, "includeHidden")).Select(WindowInfo).ToArray();
             if (op == "openSettings")
             {
                 Process.Start(new ProcessStartInfo("ms-settings:privacy") { UseShellExecute = true });
@@ -620,8 +650,10 @@ namespace LaunchFlow.Native
                 return Info(e, h);
             }
             var scope = Wire.Map(Wire.Get(request, "window"));
-            var window = FindWindow(scope);
+            bool activating = op == "perform" && Wire.Str(Wire.Map(Wire.Get(request, "action")), "kind") == "activateWindow";
+            var window = FindWindow(scope, activating || op == "window" && Wire.Bool(request, "includeHidden"));
             var locator = Wire.Map(Wire.Get(request, "locator"));
+            if (activating) locator = Wire.Obj();
             if (op == "window")
                 return WindowInfo(window);
             if (op == "elements")

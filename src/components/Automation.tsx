@@ -77,33 +77,36 @@ export function AutomationStatus() {
 function WindowChooser({
   value,
   onChange,
+  includeHidden = false,
 }: {
   value: WindowTarget;
   onChange: (v: WindowTarget) => void;
+  includeHidden?: boolean;
 }) {
   const [windows, setWindows] = useState<NativeWindow[]>([]);
   const [error, setError] = useState('');
   const refresh = () =>
     void automation
-      .windows()
+      .windows(includeHidden)
       .then(setWindows)
       .catch((e) => setError(errorText(e)));
-  useEffect(refresh, []);
+  useEffect(refresh, [includeHidden]);
   return (
     <div className="window-chooser">
       <div className="row">
         <select
-          aria-label="当前桌面窗口"
+          aria-label={includeHidden ? '桌面与托盘窗口' : '当前桌面窗口'}
           value=""
           onChange={(e) => {
             const w = windows.find((w) => w.handle === e.target.value);
             if (w) onChange(stableWindow(w));
           }}
         >
-          <option value="">选择当前桌面窗口…</option>
+          <option value="">{includeHidden ? '选择桌面或托盘窗口…' : '选择当前桌面窗口…'}</option>
           {windows.map((w) => (
             <option value={w.handle} key={w.handle}>
               {w.application} · {w.title}
+              {w.visible === false ? ' · 隐藏 / 托盘' : ''}
             </option>
           ))}
         </select>
@@ -111,6 +114,12 @@ function WindowChooser({
           刷新
         </button>
       </div>
+      {includeHidden && (
+        <p className="form-note">
+          支持恢复缩到托盘的隐藏主窗口（如
+          Codex）。应用需仍在运行；可先从托盘打开一次并选取窗口，之后缩回托盘仍可激活。
+        </p>
+      )}
       <label>
         Application
         <input
@@ -133,9 +142,11 @@ function WindowChooser({
 export function LocatorEditor({
   value,
   onChange,
+  allowHiddenWindows = false,
 }: {
   value: unknown;
   onChange: (v: Locator[]) => void;
+  allowHiddenWindows?: boolean;
 }) {
   const locators = Array.isArray(value) ? (value as Locator[]) : [];
   const [error, setError] = useState('');
@@ -229,7 +240,11 @@ export function LocatorEditor({
               </option>
             ))}
           </select>
-          <WindowChooser value={l.window} onChange={(window) => update(i, { ...l, window })} />
+          <WindowChooser
+            value={l.window}
+            onChange={(window) => update(i, { ...l, window })}
+            includeHidden={allowHiddenWindows}
+          />
           {l.kind === 'accessibility' && (
             <>
               {(['role', 'name', 'automationId', 'className', 'frameworkId'] as const).map(

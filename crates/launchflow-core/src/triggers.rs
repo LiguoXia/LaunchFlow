@@ -1,4 +1,4 @@
-//! Trigger decisions live in Rust. Cron polls each second; sensors poll every five seconds.
+//! Trigger decisions live in Rust. Cron/appointments poll each second; sensors every five seconds.
 use crate::{
     engine::Engine,
     model::*,
@@ -40,6 +40,7 @@ pub struct TriggerEvent {
 #[serde(rename_all = "camelCase", deny_unknown_fields, default)]
 struct Config {
     expression: String,
+    date_time: String,
     time: String,
     days: Vec<u32>,
     shortcut: String,
@@ -83,6 +84,9 @@ impl TriggerProvider for Builtin {
     fn validate(&self, t: &Trigger) -> Result<()> {
         let c: Config = serde_json::from_value(t.config.clone())?;
         match self.kind {
+            "once" => {
+                crate::once_schedule::parse(&c.date_time)?;
+            }
             "cron" => {
                 crate::cron_schedule::parse(&c.expression)?;
             }
@@ -122,6 +126,11 @@ impl TriggerProvider for Builtin {
     ) -> Result<Option<Observation>> {
         let c: Config = serde_json::from_value(t.config.clone())?;
         let (value, fire, scheduled) = match self.kind {
+            "once" => {
+                let target = crate::once_schedule::parse(&c.date_time)?;
+                // Use the saved wall time as the occurrence identity even if the timezone changes.
+                (c.date_time, now >= target, true)
+            }
             "cron" => {
                 let (slot, matches) = crate::cron_schedule::observation(&c.expression, now)?;
                 (slot, matches, true)
@@ -168,6 +177,12 @@ impl Default for TriggerRegistry {
         };
         for (kind, name, defaults, description) in [
             ("manual", "手动运行", json!({}), "从界面或托盘启动"),
+            (
+                "once",
+                "指定时间",
+                json!({"dateTime":""}),
+                "本机时区，到达指定时间仅运行一次；关闭或休眠期间错过时，恢复后补执行一次",
+            ),
             (
                 "cron",
                 "Cron 定时",
@@ -496,7 +511,8 @@ impl TriggerEngine {
             .clone();
         for scene in scenes {
             for t in scene.triggers.iter().filter(|t| t.enabled) {
-                if cron_only.is_some_and(|only| only != (t.kind == "cron")) {
+                if cron_only.is_some_and(|only| only != matches!(t.kind.as_str(), "cron" | "once"))
+                {
                     continue;
                 }
                 let provider = self.registry.provider(&t.kind)?;
@@ -519,12 +535,19 @@ impl TriggerEngine {
                     .insert(key, observed.value.clone());
                 let eligible = observed.fire
                     && (observed.scheduled || previous.is_some_and(|v| v != observed.value));
+                // An appointment has its own durable claim. Editing the time, changing
+                // trigger kinds or moving the clock backwards cannot re-arm an old time.
+                let claim_key = if t.kind == "once" {
+                    serde_json::to_string(&json!(["once", scene.id, t.id, observed.value]))?
+                } else {
+                    format!("{}:{}", scene.id, t.id)
+                };
                 if eligible
                     && (!observed.scheduled
                         || self
                             .engine
                             .store
-                            .claim_trigger(&format!("{}:{}", scene.id, t.id), &observed.value)?)
+                            .claim_trigger(&claim_key, &observed.value)?)
                 {
                     let _ = self.fire(&scene.id, &t.id);
                 }
@@ -533,7 +556,7 @@ impl TriggerEngine {
         Ok(())
     }
     pub fn start(self: &Arc<Self>, cancel: CancellationToken) {
-        // Network and desktop sensor I/O cannot block the seconds-based cron clock.
+        // Network and desktop sensor I/O cannot block the seconds-based appointment/cron clock.
         for (cron_only, period) in [(true, 1), (false, 5)] {
             let this = self.clone();
             let cancel = cancel.clone();

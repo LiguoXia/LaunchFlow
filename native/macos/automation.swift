@@ -388,7 +388,10 @@ func workspaceCloseCapture(_ request:Object) -> [Object] {
         let path=app.bundleURL?.path ?? app.executableURL?.path ?? ""
         let started=app.launchDate.map{String($0.timeIntervalSince1970)} ?? ""
         let protected=app.processIdentifier == Int32(num(request,"ownerPid")) || app.bundleIdentifier == "app.launchflow.desktop" || app.bundleIdentifier == "com.apple.finder" || (app.localizedName ?? "").lowercased().hasPrefix("launchflow")
-        let blocked:Any=protected ? "系统组件或 LaunchFlow，已保护" : (path.isEmpty || started.isEmpty ? "无法核实程序身份" : NSNull())
+        let blocked: Any
+        if protected { blocked = "系统组件或 LaunchFlow，已保护" }
+        else if path.isEmpty || started.isEmpty { blocked = "无法核实程序身份" }
+        else { blocked = NSNull() }
         return ["name":app.localizedName ?? "Application","executable":path,"windows":rows.map{str($0,kCGWindowName as String).isEmpty ? "应用窗口" : str($0,kCGWindowName as String)},"blocked":blocked,"target":["pid":app.processIdentifier,"started":started,"executable":path]]
     }
 }

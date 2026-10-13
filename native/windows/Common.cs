@@ -123,6 +123,10 @@ namespace LaunchFlow.Native
         public static extern bool IsWindowVisible(IntPtr window);
         [DllImport("user32.dll")]
         public static extern bool IsWindow(IntPtr window);
+        [DllImport("user32.dll", EntryPoint = "GetWindowLongW")]
+        public static extern int GetWindowLong(IntPtr window, int index);
+        [DllImport("user32.dll")]
+        public static extern IntPtr GetWindow(IntPtr window, uint command);
         [DllImport("user32.dll")]
         public static extern bool IsIconic(IntPtr window);
         [DllImport("user32.dll")]

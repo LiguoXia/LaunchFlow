@@ -123,7 +123,7 @@ public static Dictionary<string, object> Locator(Dictionary<string, object> elem
     var ancestors = Wire.List(Wire.Get(element, "ancestorPath")).Select(delegate(object ancestor) {
         var value = new Dictionary<string, object>(Wire.Map(ancestor));
         if (input) value["name"] = "";
-        return value;
+        return Desktop.StableAttributes(value);
     }).ToArray();
     var locator = Wire.Obj("kind", "accessibility", "window", window, "role", Wire.Str(element, "role"), "name",
                     input ? "" : Wire.Str(element, "name"), "automationId", Wire.Str(element, "automationId"), "className",
@@ -138,7 +138,7 @@ public static Dictionary<string, object> Locator(Dictionary<string, object> elem
             locator["frameworkId"] = "";
         }
     }
-    return locator;
+    return Desktop.StableAttributes(locator);
 }
 public static void Run(Dictionary<string, object> request)
 {

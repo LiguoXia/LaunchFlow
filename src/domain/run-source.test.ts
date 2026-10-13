@@ -24,6 +24,19 @@ const make = (source: string, triggerId?: string) =>
     },
   }) as Parameters<typeof runSource>[0];
 describe('run trigger labels', () => {
+  it('shows the saved appointment in one-time run history', () => {
+    const run = make('once', 'appointment');
+    run.sceneSnapshot.triggers = [
+      {
+        id: 'appointment',
+        kind: 'once',
+        enabled: true,
+        config: { dateTime: '2026-10-13 12:30:45' },
+        parameters: {},
+      },
+    ];
+    expect(runSource(run)).toEqual({ label: '指定时间', detail: '2026-10-13 12:30:45' });
+  });
   it('uses the recorded trigger ID from the run snapshot rather than guessing among triggers', () => {
     expect(runSource(make('cron', 'second'))).toEqual({
       label: 'Cron 定时',

@@ -18,5 +18,21 @@ class RecordedSecretTests
         source["secure"]=false;source["automationId"]="";
         locator=Sessions.Locator(source);
         Check(!Wire.Bool(locator,"secure") && Wire.Str(locator,"className")=="Edit","Ordinary input fields retain their provider constraints");
+        var chrome = Wire.Obj("role", "Edit", "frameworkId", "Chrome", "automationId", "_r_g9_",
+            "className", "ProseMirror ProseMirror-focused ProseMirror-hideselection", "secure", true);
+        var stable = Desktop.StableAttributes(chrome);
+        Check(Wire.Str(stable,"automationId")=="" && Wire.Str(stable,"className")=="ProseMirror",
+            "Chromium render IDs and editor focus/selection state are not persistent selectors");
+        Check(Wire.Bool(stable,"secure") && Wire.Str(stable,"role")=="Edit" && Wire.Str(stable,"frameworkId")=="Chrome",
+            "Stable normalization preserves role, provider and password constraints");
+        Check(Wire.Str(chrome,"automationId")=="_r_g9_" && Wire.Str(chrome,"className").Contains("focused"),
+            "Normalizing a locator does not mutate the stored scene");
+        chrome["automationId"] = ":r12:";
+        Check(Wire.Str(Desktop.StableAttributes(chrome),"automationId")=="", "Legacy React useId format is normalized");
+        chrome["automationId"] = "composer-input";
+        Check(Wire.Str(Desktop.StableAttributes(chrome),"automationId")=="composer-input", "Explicit stable IDs remain mandatory");
+        chrome["automationId"] = "_r_g9_"; chrome["frameworkId"] = "WPF";
+        Check(Wire.Str(Desktop.StableAttributes(chrome),"automationId")=="_r_g9_" && Wire.Str(Desktop.StableAttributes(chrome),"className").Contains("focused"),
+            "Chromium normalization does not relax other UI frameworks");
     }
 }

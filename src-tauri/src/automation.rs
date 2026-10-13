@@ -38,8 +38,16 @@ pub async fn automation_settings(permission: String, state: State<'_, AppState>)
         .await
 }
 #[tauri::command]
-pub async fn automation_windows(state: State<'_, AppState>) -> Result<Value> {
-    state.engine.platform.automation().windows().await
+pub async fn automation_windows(
+    include_hidden: Option<bool>,
+    state: State<'_, AppState>,
+) -> Result<Value> {
+    state
+        .engine
+        .platform
+        .automation()
+        .request(json!({"op":"windows","includeHidden":include_hidden.unwrap_or(false)}))
+        .await
 }
 #[tauri::command]
 pub async fn automation_elements(

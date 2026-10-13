@@ -1,6 +1,7 @@
 import type { Scene, Parameter, Trigger, TriggerDefinition, TriggerEvent } from '../domain/types';
 import { ParameterInput } from './RunConfiguration';
 import CronInput from './CronInput';
+import OnceScheduleInput from './OnceScheduleInput';
 export function JsonInput({
   value,
   onChange,
@@ -238,7 +239,7 @@ export default function SceneAdvancedSettings({
       <div className="form-divider" />
       <h3>触发器</h3>
       <p className="form-note">
-        手动运行始终可用。系统登录仅运行默认场景。定时任务按本地时间执行，应用关闭期间不补发。
+        手动运行始终可用。系统登录仅运行默认场景。定时任务按本机时间执行；指定时间错过后补执行一次，其他定时触发不补发。
       </p>
       {(scene.triggers ?? []).map((t, i) => {
         const definition = definitions.find((d) => d.kind === t.kind);
@@ -282,8 +283,15 @@ export default function SceneAdvancedSettings({
                 onChange={(expression) => updateTrigger(i, { config: { expression } })}
               />
             )}
+            {t.kind === 'once' && (
+              <OnceScheduleInput
+                value={String(t.config.dateTime ?? '')}
+                onChange={(dateTime) => updateTrigger(i, { config: { dateTime } })}
+              />
+            )}
             {Object.entries(t.config)
               .filter(([key]) => t.kind !== 'cron' || key !== 'expression')
+              .filter(([key]) => t.kind !== 'once' || key !== 'dateTime')
               .map(([key, value]) => (
                 <label key={key}>
                   {(

@@ -78,6 +78,104 @@ async fn settle(e: &Engine) {
     .unwrap();
 }
 #[tokio::test]
+async fn once_trigger_fires_at_seconds_boundary_and_survives_database_reopen() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("once.db");
+    let due = Local.with_ymd_and_hms(2026, 10, 13, 12, 30, 45).unwrap();
+    let scene_id;
+    {
+        let e = Engine::new(
+            Arc::new(Store::open(&path).unwrap()),
+            Arc::new(NodeRegistry::builtins()),
+            native_platform(),
+        );
+        let s = scene(
+            &e,
+            "once",
+            "once",
+            json!({"dateTime":"2026-10-13 12:30:45"}),
+        );
+        scene_id = s.id.clone();
+        let t = TriggerEngine::new(e.clone());
+        t.registry.validate(&s).unwrap();
+        t.refresh().unwrap();
+        t.poll_at(due - chrono::Duration::seconds(1)).await.unwrap();
+        assert!(e.store.runs().unwrap().is_empty());
+        let (a, b) = tokio::join!(t.poll_at(due), t.poll_at(due));
+        a.unwrap();
+        b.unwrap();
+        settle(&e).await;
+        let runs = e.store.runs().unwrap();
+        assert_eq!(runs.len(), 1);
+        assert_eq!(runs[0].source, "once");
+        assert_eq!(
+            runs[0].trigger_id.as_deref(),
+            Some(s.triggers[0].id.as_str())
+        );
+        assert_eq!(
+            runs[0].scene_snapshot.triggers[0].config["dateTime"],
+            "2026-10-13 12:30:45"
+        );
+    }
+    let e = Engine::new(
+        Arc::new(Store::open(&path).unwrap()),
+        Arc::new(NodeRegistry::builtins()),
+        native_platform(),
+    );
+    let t = TriggerEngine::new(e.clone());
+    t.refresh().unwrap();
+    t.poll_at(due + chrono::Duration::days(2)).await.unwrap();
+    assert_eq!(e.store.runs().unwrap().len(), 1);
+    // An earlier, different appointment is a new request. Returning to an already
+    // fired appointment must not repeat it, nor should moving the clock backwards.
+    let mut s = e.store.scene(&scene_id).unwrap();
+    s.triggers[0].config = json!({"dateTime":"2026-10-12 12:30:45"});
+    s = e.store.save_scene(s.clone()).unwrap();
+    t.refresh().unwrap();
+    t.poll_at(due).await.unwrap();
+    settle(&e).await;
+    assert_eq!(e.store.runs().unwrap().len(), 2);
+    s.triggers[0].config = json!({"dateTime":"2026-10-13 12:30:45"});
+    e.store.save_scene(s).unwrap();
+    t.refresh().unwrap();
+    t.poll_at(due - chrono::Duration::hours(1)).await.unwrap();
+    t.poll_at(due).await.unwrap();
+    assert_eq!(e.store.runs().unwrap().len(), 2);
+}
+
+#[tokio::test]
+async fn once_trigger_disabled_and_missed_deadline_catchup() {
+    let e = Engine::new(
+        Arc::new(Store::memory().unwrap()),
+        Arc::new(NodeRegistry::builtins()),
+        native_platform(),
+    );
+    let mut s = scene(
+        &e,
+        "once disabled",
+        "once",
+        json!({"dateTime":"2026-10-13 12:30:45"}),
+    );
+    s.triggers[0].enabled = false;
+    s = e.store.save_scene(s.clone()).unwrap();
+    let t = TriggerEngine::new(e.clone());
+    t.refresh().unwrap();
+    let after = Local.with_ymd_and_hms(2026, 10, 14, 12, 30, 50).unwrap();
+    t.poll_at(after).await.unwrap();
+    assert!(e.store.runs().unwrap().is_empty());
+    s.triggers[0].enabled = true;
+    e.store.save_scene(s).unwrap();
+    t.refresh().unwrap();
+    t.poll_at(after).await.unwrap();
+    t.poll_at(after).await.unwrap();
+    settle(&e).await;
+    assert_eq!(e.store.runs().unwrap().len(), 1);
+    let mut invalid = e.store.scenes().unwrap().remove(0);
+    invalid.triggers[0].config = json!({"dateTime":"2026-02-29 12:30:45"});
+    assert!(t.registry.validate(&invalid).is_err());
+}
+
+#[tokio::test]
 async fn schedule_weekday_and_persistent_dedup() {
     let store = Arc::new(Store::memory().unwrap());
     let e = Engine::new(
@@ -256,7 +354,7 @@ async fn lifecycle_hotkey_and_default_login_use_registry() {
     assert_eq!(runs.len(), 3);
     assert!(!runs.iter().any(|r| r.scene_id == b.id));
     assert!(t.fire(&b.id, &b.triggers[0].id).is_err());
-    assert_eq!(t.registry.definitions().len(), 11);
+    assert_eq!(t.registry.definitions().len(), 12);
 }
 #[tokio::test]
 async fn startup_policy_rejection_is_visible_and_authorized_scene_passes_preflight() {

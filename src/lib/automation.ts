@@ -36,6 +36,7 @@ export interface Locator {
 export interface NativeWindow extends WindowTarget {
   handle: string;
   bounds: Rect;
+  visible?: boolean;
 }
 export interface NativeElement {
   role: string;
@@ -92,7 +93,8 @@ export const stableWindow = (w: WindowTarget): WindowTarget => ({
 export const automation = {
   permissions: () => invoke<Record<string, string>>('automation_permissions'),
   settings: (permission: string) => invoke('automation_settings', { permission }),
-  windows: () => invoke<NativeWindow[]>('automation_windows'),
+  windows: (includeHidden = false) =>
+    invoke<NativeWindow[]>('automation_windows', { includeHidden }),
   elements: (window: WindowTarget) => invoke<NativeElement[]>('automation_elements', { window }),
   highlight: (locators: Locator[]) =>
     invoke<Diagnostic>('automation_highlight', { config: { locators } }),

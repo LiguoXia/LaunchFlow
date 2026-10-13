@@ -71,6 +71,7 @@ pub(crate) fn automation(output: &Value) -> Value {
             "foregroundWait",
             "windowUnavailable",
             "restoreTimeout",
+            "showTimeout",
             "foregroundTimeout",
             "beforeInput",
         ]
@@ -80,6 +81,8 @@ pub(crate) fn automation(output: &Value) -> Value {
     }
     for key in [
         "restoreRequested",
+        "hiddenRestoreRequested",
+        "targetVisible",
         "activationRequested",
         "requestAccepted",
         "foregroundMatched",

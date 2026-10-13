@@ -104,6 +104,7 @@ export const api = {
     invoke<ApplicationAuthorization>('application_authorization_change', { profileId, grant }),
   sensitiveActions: (sceneId: string) => invoke<string[]>('sensitive_actions', { sceneId }),
   cronPreview: (expression: string) => invoke<string[]>('cron_preview', { expression }),
+  onceSchedulePreview: (dateTime: string) => invoke<string>('once_schedule_preview', { dateTime }),
   runScene: (
     sceneId: string,
     parameters: Record<string, unknown> = {},

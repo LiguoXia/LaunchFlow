@@ -1,4 +1,12 @@
-# Signed distribution
+# Distribution
+
+## GitHub prereleases
+
+`Build and publish desktop releases` (`.github/workflows/publish.yml`) packages Windows x64, macOS Intel on `macos-15-intel`, and Apple Silicon on `macos-15`. Pushing `codex/macos-release` builds reviewable artifacts without publication; pushing a `v*` tag publishes a prerelease only after all three package jobs succeed. The tag must match the version in `package.json`. For this route Windows is unsigned and macOS uses ad-hoc signatures; no Developer ID notarization or updater is claimed.
+
+Each package job runs frontend tests, the dependency audit, formatting, Clippy and core tests. `scripts/package-release.mjs` checks the exact bundled worker protocol, verifies Mac executable architecture and code signatures, checks DMG integrity, and observes the packaged Mac application for six seconds during startup. The publish job verifies all platform reports against the tagged commit, rechecks the six asset hashes, writes `SHA256SUMS.txt`, uploads into a draft, and then makes it public. Installation and GUI automation still require validation on the user's target Mac.
+
+## Signed distribution
 
 The checked-in application is a local Phase 4 build. An unsigned installer is for acceptance only and must not be labelled V1 Release Candidate. The manual `Signed release candidate artifacts` workflow builds Windows x64 and macOS Intel / Apple Silicon artifacts, uploads them to the workflow run, and does not publish a GitHub release or change an update server.
 
@@ -29,7 +37,7 @@ Never store these private credentials in this repository or a scene. CI imports 
 3. Confirm updater signatures include `version:<release version>` in the trusted comment. `requireSignedVersion` is enabled so a genuine old artifact cannot be paired with a forged newer version in update metadata. Tauri's updater validates both the artifact signature and its signed version before installation.
 4. Serve candidate artifacts on a staging HTTPS endpoint. Exercise valid update, tampered download, wrong key, wrong signed version, unavailable endpoint, cancellation / network failure, and active-workflow installation rejection. Verify manual confirmation and successful relaunch on Windows and both Mac architectures. Do not infer this result from file presence or an unsigned build.
 5. Validate the installer in a clean Windows user account / Mac machine: fresh install, upgrade, uninstall, preserved user data, login entry, tray lifecycle, permissions after signing, and Keychain identity continuity.
-6. Close all release blockers in `V1-RELEASE-READINESS.md` before changing the release label to V1 Release Candidate. Publish the platform manifest only after these checks; this repository contains no auto-publish job.
+6. Close all release blockers in `V1-RELEASE-READINESS.md` before changing the release label to V1 Release Candidate. Publish the updater platform manifest only after these checks; the prerelease publishing job does not produce an updater manifest.
 
 The updater checks only on request, enforces HTTPS including redirects, limits the download to 256 MiB and five minutes, blocks installation while workflows / recording are active, and never bypasses UAC or Keychain authorization. Failed checks or downloads leave the current app usable. Native effects use Tauri's public window-effects configuration; no macOS private API is enabled.
 

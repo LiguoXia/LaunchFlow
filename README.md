@@ -2,7 +2,7 @@
 
 一个 Local-First 的 Windows / macOS 桌面工作环境编排器。Tauri 2 + Rust + React + TypeScript + SQLite。
 
-当前版本 **0.4.19 · 字体与可读性**：统一中文字体与字号，正文 15px、辅助说明至少 13px；加宽场景设置面板，放大标签与输入框，改善深色对比度和窄窗口布局。详见 [本版说明](docs/releases/v0.4.19.md)。
+当前版本 **0.4.23 · Windows 与 macOS 双架构发布**：提供 Windows x64 安装包和便携包、macOS Intel 与 Apple Silicon 的 DMG 和应用 ZIP。包含 Chromium 录制跨重启定位修复、指定时间一次性触发器和 Windows 托盘隐藏主窗口恢复。详见 [本版说明与下载](docs/releases/v0.4.23.md)。
 
 包含 **0.4.18 · Cron 与应用捕获**：场景支持 5 / 6 段 Cron 表达式及下次执行时间预览；运行历史显示触发方式；应用库可捕获工作区应用、Windows 内置应用和当前默认应用，勾选批量添加，已有应用自动勾选置灰。详见 [操作说明](docs/CRON-AND-APPLICATION-CAPTURE.md) 与 [版本说明](docs/releases/v0.4.18.md)。
 
@@ -14,9 +14,9 @@
 
 已有功能包括 [应用内配置 Windows 自动登录](docs/IN-APP-AUTOLOGON.md)、[默认场景启动与中文输入录制](docs/STARTUP-TEXT-FIX.md)、[点击位置修复](docs/RECORDED-CLICK-FIX.md)、[窗口激活修复](docs/GUI-FOCUS-FIX.md)、[解锁前准备桌面应用](docs/DESKTOP-STARTUP.md)、[录制审阅修复](docs/RECORDING-REVIEW-FIX.md)、[关闭工作区应用](docs/WORKSPACE-CLOSE.md)、[应用图标](docs/APPLICATION-ICONS.md)、[预授权启动](docs/PREAUTHORIZED-LAUNCH.md) 和 [应用诊断日志](docs/APPLICATION-DIAGNOSTICS.md)。**从旧版本升级后，请在设置中允许默认场景自动执行，并重新录制此前漏掉的文本。**
 
-已发布的 Windows x64 v0.4.19 下载：[安装包](https://github.com/LiguoXia/LaunchFlow/releases/download/v0.4.19/LaunchFlow_0.4.19_x64-setup.exe) · [便携 ZIP](https://github.com/LiguoXia/LaunchFlow/releases/download/v0.4.19/LaunchFlow_0.4.19_windows-x64-portable.zip) · [发布说明与校验文件](https://github.com/LiguoXia/LaunchFlow/releases/tag/v0.4.19)。这是未签名的预发布验收版；更新器未配置，升级请手动下载安装包。
+v0.4.23 下载：[Windows 安装包](https://github.com/LiguoXia/LaunchFlow/releases/download/v0.4.23/LaunchFlow_0.4.23_x64-setup.exe) · [Windows 便携 ZIP](https://github.com/LiguoXia/LaunchFlow/releases/download/v0.4.23/LaunchFlow_0.4.23_windows-x64-portable.zip) · [macOS Intel DMG](https://github.com/LiguoXia/LaunchFlow/releases/download/v0.4.23/LaunchFlow_0.4.23_macos-intel.dmg) · [macOS Apple Silicon DMG](https://github.com/LiguoXia/LaunchFlow/releases/download/v0.4.23/LaunchFlow_0.4.23_macos-apple-silicon.dmg) · [完整发布说明与校验文件](https://github.com/LiguoXia/LaunchFlow/releases/tag/v0.4.23)。这是预发布版：Windows 未签名，Mac 为 ad-hoc 签名且未公证；更新器未配置，升级请手动下载安装包。
 
-本地 v0.4.19 制品位于 `artifacts/typography/windows/`，该目录不提交到源码仓库。macOS 已提供 AX / ScreenCaptureKit / Vision / Keychain 原生实现，尚未在 Mac 实机编译或运行；不能视为跨平台验收已完成。当前没有标记为 V1 Release Candidate。
+macOS 需要 13.0 或更高版本。DMG 内应用已包含 AX / ScreenCaptureKit / Vision / Keychain 原生程序；首次打开与自动化授权见 [macOS 使用说明](docs/releases/v0.4.23.md#macos-使用)。GitHub 发布流程在对应架构构建机检查编译、测试、包内程序架构及 Mac 启动；录制回放、多屏和权限仍需在用户目标 Mac 上验收。当前没有标记为 V1 Release Candidate。
 
 - [V1 Release Readiness Report](docs/V1-RELEASE-READINESS.md)
 - [签名与发行流程](docs/RELEASE.md)
@@ -40,11 +40,11 @@ macOS 在 Mac 上分别执行：
 
 ```sh
 rustup target add aarch64-apple-darwin x86_64-apple-darwin
-node scripts/tauri.mjs build --target aarch64-apple-darwin --bundles app
-node scripts/tauri.mjs build --target x86_64-apple-darwin --bundles app
+node scripts/tauri.mjs build --target aarch64-apple-darwin --bundles app,dmg
+node scripts/tauri.mjs build --target x86_64-apple-darwin --bundles app,dmg
 ```
 
-分发签名、公证及更新产品化尚未完成。CI 配置包含 Windows x64、macOS Intel / Apple Silicon；本地 Windows 检查不等于 Mac 编译通过。
+`Build and publish desktop releases` 工作流在版本标签推送后构建三个平台，全部成功后才公开 GitHub Release；包含 SHA-256 和构建验证报告。Apple Developer ID / Windows 发行签名、公证及自动更新产品化尚未完成，带证书签名仍使用独立的 `Signed release candidate artifacts` 工作流。
 
 脚本通过 `rustup which cargo` 定位工具链。构建缓存可设置 `CARGO_TARGET_DIR`，或在已忽略的 `.local/build.json` 保存：
 

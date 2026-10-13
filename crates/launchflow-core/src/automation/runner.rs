@@ -226,7 +226,11 @@ impl NodeRunner for GuiRunner {
         definition(
             &format!("gui.{}", self.kind),
             self.name,
-            "原生辅助功能优先；失败保留定位诊断",
+            if self.kind == "activateWindow" {
+                "激活桌面窗口；Windows 支持恢复缩到系统托盘的隐藏主窗口"
+            } else {
+                "原生辅助功能优先；失败保留定位诊断"
+            },
             "gui",
             fields,
             defaults,
@@ -402,7 +406,7 @@ pub async fn resolve_action(
     let mut final_error = AutomationError::new("notFound", "No locator matched");
     for (index, locator) in ordered {
         let started = Instant::now();
-        let result = resolve_one(provider, locator, kind == "inputSecret").await;
+        let result = resolve_one(provider, locator, kind).await;
         let attempt = LocatorAttempt {
             index,
             kind: locator.kind().into(),
@@ -447,9 +451,26 @@ pub async fn resolve_action(
 async fn resolve_one(
     provider: &dyn AutomationProvider,
     locator: &Locator,
-    secure_input: bool,
+    kind: &str,
 ) -> AutomationResult<ResolvedTarget> {
     let window = locator.window().clone();
+    if kind == "activateWindow" {
+        // Discover hidden tray main windows only for explicit activation. Other
+        // GUI actions must still resolve a visible window before sending input.
+        let w = provider
+            .request(json!({"op":"window","window":window,"includeHidden":true}))
+            .await?;
+        let mut resolved = window;
+        resolved.handle = w["handle"].as_str().map(str::to_owned);
+        resolved.pid = w["pid"].as_u64().and_then(|pid| u32::try_from(pid).ok());
+        return Ok(ResolvedTarget {
+            window: resolved,
+            native_locator: Value::Null,
+            point: None,
+            element: json!({"window":w,"bounds":w["bounds"],"role":"Window"}),
+        });
+    }
+    let secure_input = kind == "inputSecret";
     let mut native_locator = Value::Null;
     let mut point = None;
     let element = match locator {

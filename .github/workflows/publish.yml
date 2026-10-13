@@ -1,0 +1,84 @@
+name: Build and publish desktop releases
+on:
+  push:
+    branches: [codex/macos-release]
+    tags: ['v*']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: desktop-release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            bundles: nsis
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+            bundles: app,dmg
+          - os: macos-15
+            target: aarch64-apple-darwin
+            bundles: app,dmg
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    env:
+      MACOSX_DEPLOYMENT_TARGET: '13.0'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install Rust components and native target
+        run: |
+          rustup update stable --no-self-update
+          rustup default stable
+          rustup component add clippy rustfmt
+          rustup target add ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release-${{ matrix.target }}
+          workspaces: '. -> target'
+      - run: npm ci
+      - run: npm audit --audit-level=moderate --registry=https://registry.npmjs.org
+      - run: npm test
+      - run: node scripts/cargo.mjs fmt --all -- --check
+      - run: node scripts/cargo.mjs clippy --workspace --all-targets -- -D warnings
+      - run: node scripts/cargo.mjs test -p launchflow-core
+      - name: Build desktop installer and bundled native workers
+        run: node scripts/tauri.mjs build --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
+      - name: Verify packages and prepare download files
+        run: node scripts/package-release.mjs ${{ matrix.target }}
+      - uses: actions/upload-artifact@v6
+        with:
+          name: release-${{ matrix.target }}
+          path: artifacts/github-release/*
+          if-no-files-found: error
+          retention-days: 14
+  publish:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: release-*
+          path: artifacts/github-release
+          merge-multiple: true
+      - name: Validate all three platforms and publish GitHub Release
+        run: node scripts/publish-release.mjs
+        env:
+          GH_TOKEN: ${{ github.token }}

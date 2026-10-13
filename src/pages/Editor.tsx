@@ -727,6 +727,7 @@ export default function Editor() {
                   )
                   .map((field) => (
                     <ConfigField
+                      allowHiddenWindows={node.type === 'gui.activateWindow'}
                       key={`${node.id}-${field.key}`}
                       field={field}
                       value={node.config[field.key]}
@@ -859,10 +860,12 @@ function ConfigField({
   field,
   value,
   onChange,
+  allowHiddenWindows = false,
 }: {
   field: FieldDefinition;
   value: unknown;
   onChange: (value: unknown) => void;
+  allowHiddenWindows?: boolean;
 }) {
   const { data, perform, setPage } = useWorkspace();
   const text = typeof value === 'string' ? value : '';
@@ -890,7 +893,7 @@ function ConfigField({
       {field.label}
       {field.required && <span className="required"> *</span>}
       {field.kind === 'locators' ? (
-        <LocatorEditor value={value} onChange={onChange} />
+        <LocatorEditor value={value} onChange={onChange} allowHiddenWindows={allowHiddenWindows} />
       ) : field.kind === 'json' ? (
         <JsonInput value={value} label={field.label} onChange={onChange} />
       ) : field.kind === 'scene' ? (
