@@ -73,6 +73,7 @@ pub(crate) fn automation(output: &Value) -> Value {
             "restoreTimeout",
             "showTimeout",
             "foregroundTimeout",
+            "interactionTimeout",
             "beforeInput",
         ]
         .contains(s)
@@ -83,6 +84,9 @@ pub(crate) fn automation(output: &Value) -> Value {
         "restoreRequested",
         "hiddenRestoreRequested",
         "targetVisible",
+        "targetEnabled",
+        "targetResponsive",
+        "applicationRestoreRequested",
         "activationRequested",
         "requestAccepted",
         "foregroundMatched",
@@ -95,6 +99,17 @@ pub(crate) fn automation(output: &Value) -> Value {
     }
     if let Some(ms) = f["elapsedMs"].as_u64() {
         focus.insert("elapsedMs".into(), json!(ms));
+    }
+    if let Some(method) = f["hiddenRestoreMethod"].as_str().filter(|s| {
+        [
+            "none",
+            "accessibility",
+            "systemCommand",
+            "applicationActivation",
+        ]
+        .contains(s)
+    }) {
+        focus.insert("hiddenRestoreMethod".into(), json!(method));
     }
     let p = a["error"]["details"]
         .get("pointer")

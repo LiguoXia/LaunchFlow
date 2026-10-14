@@ -35,6 +35,11 @@ jobs:
           rustup target add ${{ matrix.target }}
       - run: npm ci
       - run: node scripts/build-native.mjs --target ${{ matrix.target }}
+      - name: Clipboard persistence and text validation
+        run: node scripts/test-clipboard.mjs
+      - name: Window activation regressions
+        if: runner.os == 'Windows'
+        run: node scripts/test-window-focus.mjs
       - run: npm test
       - run: npm run build
       - run: node scripts/cargo.mjs fmt --all -- --check

@@ -412,6 +412,17 @@ func workspaceClose(_ request:Object) throws -> [Object] {
 }
 func dispatch(_ request:Object) throws -> Any {
     let op=str(request,"op")
+    if op == "clipboardCopyText" {
+        guard let value=request["text"] as? String, !value.isEmpty, value.utf8.count<=131072, !value.contains("\0") else {
+            throw Failure(code:"invalidRequest",message:"请输入需要复制的文本（最多 128 KiB，不能包含 NUL 字符）。")
+        }
+        let pasteboard=NSPasteboard.general
+        pasteboard.clearContents()
+        guard pasteboard.setString(value,forType:.string) else {
+            throw Failure(code:"clipboardBusy",message:"无法写入系统剪贴板，请稍后重试。")
+        }
+        return ["copied":true]
+    }
     if op == "applicationIcons" {return applicationIcons(request)}
     if op == "workspaceCloseCapture" {return workspaceCloseCapture(request)}
     if op == "workspaceClose" {return try workspaceClose(request)}

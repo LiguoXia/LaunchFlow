@@ -3,7 +3,9 @@ import { resolve } from 'node:path';
 import { mkdir, writeFile } from 'node:fs/promises';
 import assert from 'node:assert/strict';
 const suffix = process.platform === 'win32' ? '.exe' : '';
-export const worker = resolve('native/bin/launchflow-automation' + suffix);
+export const worker = resolve(
+  process.env.LAUNCHFLOW_TEST_NATIVE_WORKER || 'native/bin/launchflow-automation' + suffix,
+);
 export function callNative(request, timeout = 15000) {
   return new Promise((done, reject) => {
     const child = spawn(worker, [], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });

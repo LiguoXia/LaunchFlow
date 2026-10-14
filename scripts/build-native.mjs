@@ -55,6 +55,8 @@ if (process.platform === 'win32') {
     'Common.cs',
     'Automation.cs',
     'WindowFocus.cs',
+    'PackagedWindowActivation.cs',
+    'ClipboardText.cs',
     'RecordedPointer.cs',
     'RecordedText.cs',
     'PointerInput.cs',

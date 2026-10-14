@@ -50,6 +50,11 @@ jobs:
       - run: npm test
       - name: Compile native resources before Rust package checks
         run: node scripts/build-native.mjs --target ${{ matrix.target }}
+      - name: Clipboard persistence and text validation
+        run: node scripts/test-clipboard.mjs
+      - name: Window activation regressions
+        if: runner.os == 'Windows'
+        run: node scripts/test-window-focus.mjs
       - run: node scripts/cargo.mjs fmt --all -- --check
       - run: node scripts/cargo.mjs clippy --workspace --all-targets -- -D warnings
       - run: node scripts/cargo.mjs test -p launchflow-core

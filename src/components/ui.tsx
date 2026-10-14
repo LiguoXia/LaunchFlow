@@ -5,6 +5,7 @@ import {
   AppWindow,
   ArrowUpRight,
   Check,
+  ClipboardCopy,
   Circle,
   Code2,
   File,
@@ -41,23 +42,26 @@ export function Status({ status }: { status: RunStatus | NodeStatus }) {
   );
 }
 export function NodeIcon({ type, size = 18 }: { type: string; size?: number }) {
-  const Icon = type.startsWith('gui.')
-    ? MousePointer2
-    : type.includes('launch')
-      ? AppWindow
-      : type.endsWith('file')
-        ? File
-        : type.endsWith('folder')
-          ? Folder
-          : type.endsWith('url')
-            ? Globe
-            : type.endsWith('port')
-              ? Network
-              : type.endsWith('process')
-                ? Activity
-                : type.endsWith('command')
-                  ? Terminal
-                  : Timer;
+  const Icon =
+    type === 'clipboard.copyText'
+      ? ClipboardCopy
+      : type.startsWith('gui.')
+        ? MousePointer2
+        : type.includes('launch')
+          ? AppWindow
+          : type.endsWith('file')
+            ? File
+            : type.endsWith('folder')
+              ? Folder
+              : type.endsWith('url')
+                ? Globe
+                : type.endsWith('port')
+                  ? Network
+                  : type.endsWith('process')
+                    ? Activity
+                    : type.endsWith('command')
+                      ? Terminal
+                      : Timer;
   return <Icon size={size} strokeWidth={1.8} />;
 }
 export function SceneIcon({ icon = 'code', color = 'green' }: { icon?: string; color?: string }) {

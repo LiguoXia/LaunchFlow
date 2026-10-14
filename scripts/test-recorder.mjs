@@ -52,7 +52,13 @@ try {
   await perform('start-button', 'click');
   for (const text of ['h', 'he', 'hel', 'hello'])
     await perform('project-input', 'inputText', { text });
-  await pause(500);
+  await until(() =>
+    recorder.events.some(
+      (event) =>
+        event.event === 'actions' &&
+        event.actions?.some((action) => action.kind === 'inputText' && action.text === 'hello'),
+    ),
+  );
   recorder.send('pause');
   await until(() => recorder.events.some((e) => e.state === 'paused'));
   await perform('project-input', 'inputText', { text: 'PAUSED_DO_NOT_RECORD' });

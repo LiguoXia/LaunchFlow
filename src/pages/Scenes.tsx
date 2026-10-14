@@ -88,7 +88,7 @@ export default function Scenes() {
         <Modal title="载入 Windows 体验模板" onClose={() => !busy && setShowTemplate(false)}>
           <div className="modal-body template-preview">
             <p>
-              生成一个含 42
+              生成一个含 43
               步的主场景、一个配套子场景，以及两个应用配置。载入后可编辑、运行，也可在场景卡片中分别删除。
             </p>
             <ul>
@@ -96,6 +96,7 @@ export default function Scenes() {
                 启动应用、打开文件 / 文件夹 / 网页：使用 Windows 记事本、资源管理器与默认浏览器。
               </li>
               <li>等待、命令、条件、汇合和子流程：观察就绪检测、分支选择与子运行。</li>
+              <li>复制文本：将配置内容写入系统剪贴板，体验可配合快捷键粘贴的输入方式。</li>
               <li>
                 20 种 GUI
                 步骤与工作区恢复：在随包提供的练习窗口体验中文输入、菜单、拖动、窗口布局与截图。

@@ -66,7 +66,8 @@ fn gui_focus_diagnostics_survive_copy_and_bundle_without_private_fields() {
         "locatorAttempts":[{"kind":"window","success":true,"durationMs":20,"input":"PRIVATE_GUI_NAME"}],
         "error":{"code":"focusDenied","message":"PRIVATE_GUI_NAME","details":{
             "stage":"foregroundTimeout","elapsedMs":2000,"foregroundMatched":false,
-            "requestAccepted":true,"foregroundGrantAccepted":true,"hiddenRestoreRequested":true,"targetVisible":false,"title":"PRIVATE_GUI_NAME"}}
+            "requestAccepted":true,"foregroundGrantAccepted":true,"hiddenRestoreRequested":true,"targetVisible":false,
+            "hiddenRestoreMethod":"applicationActivation","applicationId":"PRIVATE_GUI_NAME","title":"PRIVATE_GUI_NAME"}}
     }});
     let report = application_log::report("0.4.10", dir.path(), Some(&run)).unwrap();
     assert!(!report.contains("PRIVATE_GUI_NAME"));
@@ -77,6 +78,7 @@ fn gui_focus_diagnostics_survive_copy_and_bundle_without_private_fields() {
     assert_eq!(a["focus"]["requestAccepted"], true);
     assert_eq!(a["focus"]["hiddenRestoreRequested"], true);
     assert_eq!(a["focus"]["targetVisible"], false);
+    assert_eq!(a["focus"]["hiddenRestoreMethod"], "applicationActivation");
     let bundle =
         launchflow_core::diagnostics::bundle("0.4.10", 1, &json!({}), &[run.clone()]).unwrap();
     let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bundle)).unwrap();
@@ -86,6 +88,7 @@ fn gui_focus_diagnostics_survive_copy_and_bundle_without_private_fields() {
         .read_to_string(&mut text)
         .unwrap();
     assert!(text.contains("foregroundTimeout"));
+    assert!(text.contains("applicationActivation"));
     assert!(!text.contains("PRIVATE_GUI_NAME"));
     run.node_runs[0].output["automation"]["error"]["code"] = json!("PRIVATE_GUI_NAME");
     run.node_runs[0].output["automation"]["error"]["details"]["stage"] = json!("PRIVATE_GUI_NAME");

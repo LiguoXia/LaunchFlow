@@ -60,7 +60,7 @@ pub fn windows_demo(
     port: u16,
 ) -> WindowsDemo {
     let mut main = Scene::new("Windows 全步骤体验");
-    main.description = "内置入门模板 · 32 种步骤。运行前请保存手头工作并观察练习窗口；可在运行详情中取消。主场景和配套子场景可分别删除。".into();
+    main.description = "内置入门模板 · 33 种步骤。运行前请保存手头工作并观察练习窗口；可在运行详情中取消。主场景和配套子场景可分别删除。".into();
     main.max_parallel = 1;
     let mut child = Scene::new("体验模板 · 子流程");
     child.description =
@@ -206,6 +206,13 @@ pub fn windows_demo(
         "18 · Escape 关闭菜单",
         "向指定窗口发送单个按键。",
         gui("", json!({"key":"Escape"})),
+    );
+    append(
+        &mut main,
+        "clipboard.copyText",
+        "复制后续输入文本到剪贴板",
+        "只填写要复制的文本即可；可把后续输入步骤替换成定位输入框后 Ctrl+V 粘贴。",
+        json!({"text":"你好，LaunchFlow！"}),
     );
     append(
         &mut main,

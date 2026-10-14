@@ -3,7 +3,9 @@ import { mkdtempSync, copyFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 const directory = mkdtempSync(join(tmpdir(), 'lf-focus-'));
-const worker = resolve('native/bin/launchflow-automation.exe');
+const worker = resolve(
+  process.env.LAUNCHFLOW_TEST_NATIVE_WORKER || 'native/bin/launchflow-automation.exe',
+);
 const exe = join(directory, 'WindowFocusTests.exe');
 copyFileSync(worker, join(directory, 'launchflow-automation.exe'));
 execFileSync(

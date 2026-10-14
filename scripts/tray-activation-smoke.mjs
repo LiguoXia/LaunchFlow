@@ -94,9 +94,14 @@ execFileSync(
   { windowsHide: true },
 );
 const marker = join(dataDir, 'tray');
-const fixture = spawn(fixturePath, [marker], { windowsHide: true, stdio: 'ignore' });
+const fixture = spawn(
+  fixturePath,
+  [marker, ...(process.argv.includes('--baseline') ? ['baseline'] : [])],
+  { windowsHide: true, stdio: 'ignore' },
+);
 const scope = { pid: fixture.pid, title: 'LaunchFlow Tray Fixture' };
 const info = () => callNative({ op: 'window', window: scope, includeHidden: true });
+const state = async () => JSON.parse(await readFile(marker + '.json', 'utf8'));
 async function command(value) {
   await writeFile(marker + '.command', value);
   await sleep(180);
@@ -215,6 +220,55 @@ try {
     assert.equal(run.nodeRuns[0].output.automation.focus.targetVisible, true);
     await writeFile(join(artifacts, 'activation-run.json'), JSON.stringify(run, null, 2));
   });
+  await check(
+    'Restored tray window processes actual mouse clicks, not just HWND visibility',
+    async () => {
+      const before = await state();
+      const result = await callNative({
+        op: 'perform',
+        window: scope,
+        point: before.clickPoint,
+        action: { kind: 'click' },
+      });
+      assert.equal(result.pointer.inputEventsSent, 2);
+      await expect.poll(async () => (await state()).clicks).toBe(before.clicks + 1);
+      assert.equal((await state()).interactionReady, true);
+    },
+  );
+  await check(
+    'Saved workflow restores from tray and its following click is handled by the application',
+    async () => {
+      await command('hide');
+      const before = await state();
+      const node = structuredClone(scene.workflow.nodes[0]);
+      node.id = 'click-after-tray';
+      node.type = 'gui.click';
+      node.name = 'Click after tray restore';
+      node.config = {
+        locators: [
+          {
+            kind: 'relativeCoordinate',
+            window: node.config.locators[0].window,
+            x: (before.clickPoint.x - before.bounds.x) / before.bounds.width,
+            y: (before.clickPoint.y - before.bounds.y) / before.bounds.height,
+          },
+        ],
+        captureOnFailure: false,
+      };
+      scene.workflow.nodes.push(node);
+      scene.workflow.edges = [
+        { id: 'tray-to-click', from: scene.workflow.nodes[0].id, to: node.id, outlet: 'success' },
+      ];
+      scene = await invoke('save_scene', { scene });
+      const run = await activate();
+      await expect.poll(async () => (await state()).clicks).toBe(before.clicks + 1);
+      assert.equal(run.nodeRuns[1].output.automation.pointer.inputEventsSent, 2);
+      await writeFile(join(artifacts, 'tray-and-click-run.json'), JSON.stringify(run, null, 2));
+      scene.workflow.nodes = [scene.workflow.nodes[0]];
+      scene.workflow.edges = [];
+      scene = await invoke('save_scene', { scene });
+    },
+  );
   await check('Restoring a hidden maximized window preserves its maximized placement', async () => {
     await command('maximizeHide');
     assert.equal((await info()).visible, false);

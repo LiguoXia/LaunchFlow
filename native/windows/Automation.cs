@@ -28,7 +28,11 @@ namespace LaunchFlow.Native
             // child, owned or no-activate helper windows merely because they have a title.
             uint style = unchecked((uint)Win.GetWindowLong(h, -16));
             uint extended = unchecked((uint)Win.GetWindowLong(h, -20));
+            string windowClass = Win.Class(h);
+            Win.RECT bounds;
             return !Win.IsWindowVisible(h) && Win.GetWindow(h, 4) == IntPtr.Zero &&
+                windowClass.IndexOf("TrayIconMessageWindow", StringComparison.OrdinalIgnoreCase) < 0 &&
+                Win.GetWindowRect(h, out bounds) && bounds.Right - bounds.Left >= 100 && bounds.Bottom - bounds.Top >= 80 &&
                 (style & 0x40000000) == 0 && (extended & (0x80 | 0x08000000)) == 0 &&
                 ((style & 0x00C00000) == 0x00C00000 || (style & 0x00080000) != 0);
         }
@@ -36,7 +40,8 @@ namespace LaunchFlow.Native
         {
             var result = new List<IntPtr>();
             Win.EnumWindows(delegate(IntPtr h, IntPtr _) {
-                if ((Win.IsWindowVisible(h) || includeHidden && RestorableHiddenWindow(h)) &&
+                if (Win.Class(h).IndexOf("TrayIconMessageWindow", StringComparison.OrdinalIgnoreCase) < 0 &&
+                    (Win.IsWindowVisible(h) || includeHidden && RestorableHiddenWindow(h)) &&
                     Win.Title(h) != "" && !Win.Class(h).StartsWith("LaunchFlowOverlay"))
                     result.Add(h);
                 return true;
@@ -56,7 +61,8 @@ namespace LaunchFlow.Native
             {
             }
             return Wire.Obj("handle", h.ToInt64().ToString(), "pid", pid, "application", app, "title", Win.Title(h),
-                            "className", Win.Class(h), "bounds", Win.Bounds(h), "visible", Win.IsWindowVisible(h), "state",
+                            "className", Win.Class(h), "bounds", Win.Bounds(h), "visible", Win.IsWindowVisible(h),
+                            "enabled", Win.IsWindowEnabled(h), "state",
                             Win.IsIconic(h)   ? "minimized"
                             : Win.IsZoomed(h) ? "maximized"
                                               : "normal",
@@ -321,7 +327,7 @@ namespace LaunchFlow.Native
             }
             if (kind == "activateWindow")
             {
-                Activate(window);
+                WindowFocus.ActivateExplicit(window);
                 return;
             }
             if (kind == "moveWindow" || kind == "resizeWindow")
@@ -619,6 +625,7 @@ namespace LaunchFlow.Native
         public static object Dispatch(Dictionary<string, object> request)
         {
             string op = Wire.Str(request, "op");
+            if (op == "clipboardCopyText") return ClipboardText.Copy(request);
             if (op == "desktopStartup") return DesktopStartup.Task(request);
             if (op == "desktopStartupConditions") return DesktopStartup.Conditions();
             if (op == "configureAutologon") return AutoLogonDialog.Request();

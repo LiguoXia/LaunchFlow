@@ -101,6 +101,9 @@ impl NodeRegistry {
             registry.register(runner).expect("unique GUI runner");
         }
         registry
+            .register(Arc::new(crate::clipboard::CopyTextRunner))
+            .expect("unique clipboard runner");
+        registry
             .register(Arc::new(crate::workspace::RestoreRunner))
             .expect("unique workspace runner");
         registry

@@ -42,19 +42,15 @@ async function start() {
   await new Promise((r) => socket.listen(0, '127.0.0.1', r));
   const port = socket.address().port;
   await new Promise((r) => socket.close(r));
-  app = spawn(
-    resolve(local.targetDir, 'debug/launchflow.exe'),
-    [],
-    {
-      windowsHide: true,
-      stdio: 'ignore',
-      env: {
-        ...process.env,
-        LAUNCHFLOW_TEST_DATA_DIR: dataDir,
-        WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-address=127.0.0.1 --remote-debugging-port=${port}`,
-      },
+  app = spawn(resolve(local.targetDir, 'debug/launchflow.exe'), [], {
+    windowsHide: true,
+    stdio: 'ignore',
+    env: {
+      ...process.env,
+      LAUNCHFLOW_TEST_DATA_DIR: dataDir,
+      WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-address=127.0.0.1 --remote-debugging-port=${port}`,
     },
-  );
+  });
   for (let i = 0; i < 120 && !browser; i++) {
     try {
       browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`);
@@ -172,7 +168,7 @@ try {
     },
   );
   await check(
-    'Template preview loads two scenes and 32 enabled types without changing the default',
+    'Template preview loads two scenes and 33 enabled types without changing the default',
     async () => {
       await page.getByRole('button', { name: '载入体验模板', exact: true }).click();
       const dialog = page.getByRole('dialog', { name: '载入 Windows 体验模板' });
@@ -202,13 +198,13 @@ try {
   );
   const main = demos.find((s) => s.workflow.nodes.length > 1);
   await check(
-    'Unmodified 42-step template executes all built-in types on real Windows',
+    'Unmodified 43-step template executes all built-in types on real Windows',
     async () => {
       await focusApp();
       const run = await finish(
         (await invoke('run_scene', { sceneId: main.id, approved: true })).id,
       );
-      assert.equal(run.nodeRuns.length, 42);
+      assert.equal(run.nodeRuns.length, 43);
       assert(run.nodeRuns.every((n) => n.status === 'succeeded'));
       const screenshot = run.nodeRuns.find(
         (r) => r.nodeId === main.workflow.nodes.find((n) => n.type === 'gui.screenshot').id,

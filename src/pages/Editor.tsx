@@ -544,21 +544,25 @@ export default function Editor() {
                     <span className="step-number">{(index + 1).toString().padStart(2, '0')}</span>
                   </div>
                   <div className="node-preview">
-                    {n.type.startsWith('gui.')
-                      ? guiPreview(n)
-                      : n.type === 'application.launch'
-                        ? data.profiles.find((p) => p.id === n.config.applicationId)?.displayName ||
-                          '选择要启动的应用'
-                        : n.type === 'wait.port'
-                          ? `${n.config.host}:${n.config.port}`
-                          : n.type === 'system.delay'
-                            ? `${Number(n.config.durationMs) / 1000} 秒`
-                            : String(
-                                n.config.target ||
-                                  n.config.processName ||
-                                  n.config.program ||
-                                  '待配置',
-                              )}
+                    {n.type === 'clipboard.copyText'
+                      ? typeof n.config.text === 'string' && n.config.text.length
+                        ? `复制 ${Array.from(n.config.text).length} 个字符`
+                        : '填写需要复制的文本'
+                      : n.type.startsWith('gui.')
+                        ? guiPreview(n)
+                        : n.type === 'application.launch'
+                          ? data.profiles.find((p) => p.id === n.config.applicationId)
+                              ?.displayName || '选择要启动的应用'
+                          : n.type === 'wait.port'
+                            ? `${n.config.host}:${n.config.port}`
+                            : n.type === 'system.delay'
+                              ? `${Number(n.config.durationMs) / 1000} 秒`
+                              : String(
+                                  n.config.target ||
+                                    n.config.processName ||
+                                    n.config.program ||
+                                    '待配置',
+                                )}
                   </div>
                   <div className="node-card-controls">
                     <span>超时 {n.timeoutMs / 1000}s</span>
@@ -924,6 +928,8 @@ function ConfigField({
             </button>
           )}
         </>
+      ) : field.kind === 'textarea' ? (
+        <textarea rows={6} value={text} onChange={(e) => onChange(e.target.value)} />
       ) : field.kind === 'arguments' ? (
         <textarea
           rows={3}

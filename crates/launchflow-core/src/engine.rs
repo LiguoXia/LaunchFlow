@@ -730,6 +730,7 @@ impl Engine {
                         }
                         retries.remove(&index);
                         if (node.node_type.starts_with("gui.")
+                            || node.node_type == "clipboard.copyText"
                             || node.node_type == "workspace.restore")
                             && !self.platform.desktop_ready()
                         {
