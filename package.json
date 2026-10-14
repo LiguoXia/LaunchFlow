@@ -1,6 +1,6 @@
 {
   "name": "launchflow",
-  "version": "0.4.25",
+  "version": "0.4.26",
   "private": true,
   "type": "module",
   "scripts": {
@@ -30,6 +30,7 @@
     "test:electron-tray": "node scripts/electron-tray-smoke.mjs",
     "test:clipboard": "node scripts/test-clipboard.mjs",
     "test:clipboard-editor": "node scripts/clipboard-smoke.mjs",
+    "test:searchable-selects": "node scripts/searchable-selects-smoke.mjs",
     "test:recorded-click": "node scripts/recorded-click-smoke.mjs",
     "test:recorded-text": "node scripts/recorded-text-smoke.mjs",
     "test:recorded-restart": "node scripts/recorded-restart-smoke.mjs",

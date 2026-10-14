@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { Empty, NodeIcon } from '../components/ui';
 import ApplicationIcon from '../components/ApplicationIcon';
+import SearchSelect from '../components/SearchSelect';
 import WorkflowNodeIcon from '../components/WorkflowNodeIcon';
 import {
   createNode,
@@ -674,27 +675,31 @@ export default function Editor() {
                 </label>
                 <label>
                   图标
-                  <select
+                  <SearchSelect
+                    label="图标"
                     value={draft.icon}
-                    onChange={(e) => change({ ...draft, icon: e.target.value })}
-                  >
-                    <option value="code">代码</option>
-                    <option value="terminal">终端</option>
-                    <option value="globe">浏览器</option>
-                    <option value="folder">文件夹</option>
-                  </select>
+                    onChange={(value) => change({ ...draft, icon: value })}
+                    options={[
+                      { value: 'code', label: '代码' },
+                      { value: 'terminal', label: '终端' },
+                      { value: 'globe', label: '浏览器' },
+                      { value: 'folder', label: '文件夹' },
+                    ]}
+                  />
                 </label>
                 <label>
                   颜色
-                  <select
+                  <SearchSelect
+                    label="颜色"
                     value={draft.color}
-                    onChange={(e) => change({ ...draft, color: e.target.value })}
-                  >
-                    <option value="green">绿色</option>
-                    <option value="blue">蓝色</option>
-                    <option value="violet">紫色</option>
-                    <option value="orange">橙色</option>
-                  </select>
+                    onChange={(value) => change({ ...draft, color: value })}
+                    options={[
+                      { value: 'green', label: '绿色' },
+                      { value: 'blue', label: '蓝色' },
+                      { value: 'violet', label: '紫色' },
+                      { value: 'orange', label: '橙色' },
+                    ]}
+                  />
                 </label>
                 <p className="form-note">
                   命令与 GUI
@@ -754,17 +759,19 @@ export default function Editor() {
                 </label>
                 <label>
                   失败策略
-                  <select
+                  <SearchSelect
+                    label="失败策略"
                     value={node.failurePolicy}
-                    onChange={(e) =>
-                      updateNode({ failurePolicy: e.target.value as WorkflowNode['failurePolicy'] })
+                    onChange={(value) =>
+                      updateNode({ failurePolicy: value as WorkflowNode['failurePolicy'] })
                     }
-                  >
-                    <option value="stopWorkflow">停止工作流</option>
-                    <option value="skipAndContinue">跳过并继续</option>
-                    <option value="askUser">暂停并询问</option>
-                    <option value="failureBranch">走 failure 分支</option>
-                  </select>
+                    options={[
+                      { value: 'stopWorkflow', label: '停止工作流' },
+                      { value: 'skipAndContinue', label: '跳过并继续' },
+                      { value: 'askUser', label: '暂停并询问' },
+                      { value: 'failureBranch', label: '走 failure 分支' },
+                    ]}
+                  />
                 </label>
                 <label>
                   重试次数
@@ -796,16 +803,16 @@ export default function Editor() {
                 </label>
                 <label>
                   运行平台
-                  <select
+                  <SearchSelect
+                    label="运行平台"
                     value={node.platformConstraint.length === 1 ? node.platformConstraint[0] : ''}
-                    onChange={(e) =>
-                      updateNode({ platformConstraint: e.target.value ? [e.target.value] : [] })
-                    }
-                  >
-                    <option value="">Windows 与 macOS</option>
-                    <option value="windows">仅 Windows</option>
-                    <option value="macos">仅 macOS</option>
-                  </select>
+                    onChange={(value) => updateNode({ platformConstraint: value ? [value] : [] })}
+                    options={[
+                      { value: '', label: 'Windows 与 macOS' },
+                      { value: 'windows', label: '仅 Windows' },
+                      { value: 'macos', label: '仅 macOS' },
+                    ]}
+                  />
                   <small>约束只检查被条件分支选中的节点。</small>
                 </label>
                 <label>
@@ -901,26 +908,37 @@ function ConfigField({
       ) : field.kind === 'json' ? (
         <JsonInput value={value} label={field.label} onChange={onChange} />
       ) : field.kind === 'scene' ? (
-        <select value={text} onChange={(e) => onChange(e.target.value)}>
-          <option value="">选择子场景…</option>
-          {data.scenes.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-            </option>
-          ))}
-        </select>
+        <SearchSelect
+          label={field.label}
+          value={text}
+          onChange={onChange}
+          clearable
+          placeholder="选择子场景，输入名称搜索…"
+          options={data.scenes.map((s) => ({ value: s.id, label: s.name }))}
+        />
       ) : field.kind === 'application' ? (
         <>
           <span className="application-select">
             <ApplicationIcon profile={data.profiles.find((p) => p.id === text)} size={24} />
-            <select value={text} onChange={(e) => onChange(e.target.value)}>
-              <option value="">选择应用…</option>
-              {data.profiles.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.displayName}
-                </option>
-              ))}
-            </select>
+            <SearchSelect
+              label={field.label}
+              value={text}
+              onChange={onChange}
+              clearable
+              placeholder="选择应用，输入名称搜索…"
+              options={data.profiles.map((p) => ({
+                value: p.id,
+                label: p.displayName,
+                description: p.windows.processName || p.macos.processName,
+                keywords: [
+                  p.windows.processName,
+                  p.windows.executable.split(/[\\/]/).pop() ?? '',
+                  p.macos.bundleId,
+                  p.macos.processName,
+                  p.macos.appPath.split('/').pop() ?? '',
+                ],
+              }))}
+            />
           </span>
           {!data.profiles.length && (
             <button type="button" className="text-link" onClick={() => setPage('applications')}>
@@ -937,15 +955,18 @@ function ConfigField({
           onChange={(e) => onChange(e.target.value ? e.target.value.split('\n') : [])}
         />
       ) : field.kind === 'select' ? (
-        <select value={text} onChange={(e) => onChange(e.target.value)}>
-          {field.options.map((option) => (
-            <option key={option} value={option}>
-              {({ skip: '跳过重复启动', newInstance: '启动新实例' } as Record<string, string>)[
+        <SearchSelect
+          label={field.label}
+          value={text}
+          onChange={onChange}
+          options={field.options.map((option) => ({
+            value: option,
+            label:
+              ({ skip: '跳过重复启动', newInstance: '启动新实例' } as Record<string, string>)[
                 option
-              ] || option}
-            </option>
-          ))}
-        </select>
+              ] || option,
+          }))}
+        />
       ) : field.kind === 'number' ? (
         <input
           type="text"

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { Modal } from './ui';
+import SearchSelect from './SearchSelect';
 import type { Parameter, Scene } from '../domain/types';
 export function ParameterInput({
   parameter: p,
@@ -13,28 +14,30 @@ export function ParameterInput({
 }) {
   if (p.kind === 'boolean')
     return (
-      <select
+      <SearchSelect
+        label={p.name || '默认值'}
         value={value === true ? 'true' : value === false ? 'false' : ''}
-        onChange={(e) => onChange(e.target.value === '' ? null : e.target.value === 'true')}
+        onChange={(value) => onChange(value === '' ? null : value === 'true')}
         required={p.required}
-      >
-        <option value="">请选择</option>
-        <option value="true">True</option>
-        <option value="false">False</option>
-      </select>
+        clearable
+        placeholder="请选择或输入搜索…"
+        options={[
+          { value: 'true', label: 'True' },
+          { value: 'false', label: 'False' },
+        ]}
+      />
     );
   if (p.kind === 'select')
     return (
-      <select
+      <SearchSelect
+        label={p.name || '默认值'}
         value={String(value ?? '')}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={onChange}
         required={p.required}
-      >
-        <option value="">请选择</option>
-        {p.options.map((o) => (
-          <option key={o}>{o}</option>
-        ))}
-      </select>
+        clearable
+        placeholder="请选择或输入搜索…"
+        options={p.options.map((value) => ({ value, label: value }))}
+      />
     );
   return (
     <div className="input-with-action">

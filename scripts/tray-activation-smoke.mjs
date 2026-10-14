@@ -195,9 +195,10 @@ try {
       await page.getByRole('button', { name: '编辑步骤 恢复托盘窗口', exact: true }).click();
       const chooser = page.getByLabel('桌面与托盘窗口', { exact: true });
       await expect(chooser).toBeVisible();
-      const option = chooser.locator('option').filter({ hasText: 'LaunchFlow Tray Fixture' });
+      await chooser.fill('Tray Fixture');
+      const option = page.getByRole('option').filter({ hasText: 'LaunchFlow Tray Fixture' });
       await expect(option).toContainText('隐藏 / 托盘');
-      await chooser.selectOption(await option.getAttribute('value'));
+      await option.click();
       await page.getByRole('button', { name: '保存', exact: true }).click();
       await expect
         .poll(async () => {

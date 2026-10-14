@@ -233,7 +233,9 @@ try {
         .click();
       await page.getByRole('button', { name: '场景设置', exact: true }).click();
       await page.getByRole('button', { name: '添加触发器', exact: true }).click();
-      await page.getByLabel('触发方式', { exact: true }).selectOption('cron');
+      await page.getByRole('combobox', { name: '触发方式', exact: true }).click();
+      await page.getByRole('combobox', { name: '触发方式', exact: true }).fill('cron');
+      await page.locator('[role="option"][data-option-value="cron"]').click();
       const expression = page.getByLabel('Cron 表达式', { exact: true });
       await expression.fill('61 * * * *');
       await expect(page.locator('.cron-preview').getByRole('alert')).toBeVisible();

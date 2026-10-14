@@ -2,6 +2,7 @@ import type { Scene, Parameter, Trigger, TriggerDefinition, TriggerEvent } from 
 import { ParameterInput } from './RunConfiguration';
 import CronInput from './CronInput';
 import OnceScheduleInput from './OnceScheduleInput';
+import SearchSelect from './SearchSelect';
 export function JsonInput({
   value,
   onChange,
@@ -53,36 +54,40 @@ export default function SceneAdvancedSettings({
       <div className="form-divider" />
       <label>
         敏感操作策略
-        <select
+        <SearchSelect
+          label="敏感操作策略"
           value={scene.sensitiveActionPolicy ?? 'blockAtStartup'}
-          onChange={(e) =>
+          onChange={(value) =>
             change({
               ...scene,
-              sensitiveActionPolicy: e.target.value as Scene['sensitiveActionPolicy'],
+              sensitiveActionPolicy: value as Scene['sensitiveActionPolicy'],
             })
           }
-        >
-          <option value="askEveryTime">每次执行确认</option>
-          <option value="allowForThisScene">允许此场景执行</option>
-          <option value="blockAtStartup">登录时阻止敏感操作</option>
-        </select>
+          options={[
+            { value: 'askEveryTime', label: '每次执行确认' },
+            { value: 'allowForThisScene', label: '允许此场景执行' },
+            { value: 'blockAtStartup', label: '登录时阻止敏感操作' },
+          ]}
+        />
         <small>适用于命令、Secret 输入和可修改应用内容的 GUI 操作；不会绕过系统授权。</small>
       </label>
       <label>
         重复运行策略
-        <select
+        <SearchSelect
+          label="重复运行策略"
           value={scene.concurrentRunPolicy ?? 'ignore'}
-          onChange={(e) =>
+          onChange={(value) =>
             change({
               ...scene,
-              concurrentRunPolicy: e.target.value as Scene['concurrentRunPolicy'],
+              concurrentRunPolicy: value as Scene['concurrentRunPolicy'],
             })
           }
-        >
-          <option value="ignore">忽略重复触发</option>
-          <option value="queue">按顺序排队</option>
-          <option value="restart">取消当前并重启</option>
-        </select>
+          options={[
+            { value: 'ignore', label: '忽略重复触发' },
+            { value: 'queue', label: '按顺序排队' },
+            { value: 'restart', label: '取消当前并重启' },
+          ]}
+        />
       </label>
       <label>
         最大并行节点
@@ -107,16 +112,16 @@ export default function SceneAdvancedSettings({
           </label>
           <label>
             类型
-            <select
+            <SearchSelect
+              label="类型"
               value={p.kind}
-              onChange={(e) =>
+              onChange={(value) =>
                 updateParameter(i, {
-                  kind: e.target.value as Parameter['kind'],
+                  kind: value as Parameter['kind'],
                   defaultValue: null,
                 })
               }
-            >
-              {[
+              options={[
                 'string',
                 'number',
                 'boolean',
@@ -124,10 +129,8 @@ export default function SceneAdvancedSettings({
                 'file',
                 'directory',
                 'secretReference',
-              ].map((k) => (
-                <option key={k}>{k}</option>
-              ))}
-            </select>
+              ].map((value) => ({ value, label: value }))}
+            />
           </label>
           <label>
             说明
@@ -249,24 +252,19 @@ export default function SceneAdvancedSettings({
             <summary>{definition?.name ?? t.kind}</summary>
             <label>
               触发方式
-              <select
-                aria-label="触发方式"
+              <SearchSelect
+                label="触发方式"
                 value={t.kind}
-                onChange={(e) =>
+                onChange={(value) =>
                   updateTrigger(i, {
-                    kind: e.target.value,
+                    kind: value,
                     config: structuredClone(
-                      definitions.find((d) => d.kind === e.target.value)?.defaults ?? {},
+                      definitions.find((d) => d.kind === value)?.defaults ?? {},
                     ),
                   })
                 }
-              >
-                {definitions.map((d) => (
-                  <option key={d.kind} value={d.kind}>
-                    {d.name}
-                  </option>
-                ))}
-              </select>
+                options={definitions.map((d) => ({ value: d.kind, label: d.name }))}
+              />
             </label>
             <small>{definition?.description}</small>
             <label className="checkbox-label">

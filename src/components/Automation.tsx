@@ -18,6 +18,7 @@ import { createNode, withSequence } from '../domain/editor';
 import { isSequence, sequenceNodes } from '../domain/graph';
 import { JsonInput } from './SceneAdvancedSettings';
 import { Modal, Status } from './ui';
+import SearchSelect from './SearchSelect';
 
 export function useAutomationSession() {
   const [session, setSession] = useState<Session | null>(null);
@@ -85,6 +86,18 @@ function WindowChooser({
 }) {
   const [windows, setWindows] = useState<NativeWindow[]>([]);
   const [error, setError] = useState('');
+  const candidates = windows.filter((w) => {
+    const saved = stableWindow(w);
+    return (
+      Object.entries(value).some(([, field]) => Boolean(field)) &&
+      Object.entries(value).every(
+        ([key, field]) =>
+          !field ||
+          w[key as keyof NativeWindow] === field ||
+          saved[key as keyof WindowTarget] === field,
+      )
+    );
+  });
   const refresh = () =>
     void automation
       .windows(includeHidden)
@@ -94,22 +107,20 @@ function WindowChooser({
   return (
     <div className="window-chooser">
       <div className="row">
-        <select
-          aria-label={includeHidden ? '桌面与托盘窗口' : '当前桌面窗口'}
-          value=""
-          onChange={(e) => {
-            const w = windows.find((w) => w.handle === e.target.value);
+        <SearchSelect
+          label={includeHidden ? '桌面与托盘窗口' : '当前桌面窗口'}
+          value={candidates.length === 1 ? candidates[0].handle : ''}
+          onChange={(selected) => {
+            const w = windows.find((w) => w.handle === selected);
             if (w) onChange(stableWindow(w));
           }}
-        >
-          <option value="">{includeHidden ? '选择桌面或托盘窗口…' : '选择当前桌面窗口…'}</option>
-          {windows.map((w) => (
-            <option value={w.handle} key={w.handle}>
-              {w.application} · {w.title}
-              {w.visible === false ? ' · 隐藏 / 托盘' : ''}
-            </option>
-          ))}
-        </select>
+          placeholder={includeHidden ? '输入应用或窗口名称搜索…' : '输入窗口名称搜索…'}
+          emptyText="没有匹配的窗口，可刷新列表或手动填写"
+          options={windows.map((w) => ({
+            value: w.handle,
+            label: `${w.application} · ${w.title}${w.visible === false ? ' · 隐藏 / 托盘' : ''}`,
+          }))}
+        />
         <button type="button" className="text-link" onClick={refresh}>
           刷新
         </button>
@@ -206,11 +217,10 @@ export function LocatorEditor({
               <Trash2 size={14} />
             </button>
           </div>
-          <select
-            aria-label={`Locator ${i + 1} 类型`}
+          <SearchSelect
+            label={`Locator ${i + 1} 类型`}
             value={l.kind === 'text' && l.ocr ? 'ocr' : l.kind}
-            onChange={(e) => {
-              const kind = e.target.value;
+            onChange={(kind) => {
               update(i, {
                 kind: kind === 'ocr' ? 'text' : kind,
                 window: l.window,
@@ -225,8 +235,7 @@ export function LocatorEditor({
                         : {}),
               });
             }}
-          >
-            {[
+            options={[
               ['accessibility', 'Accessibility'],
               ['text', 'Accessible Text'],
               ['ocr', 'OCR Text'],
@@ -234,12 +243,8 @@ export function LocatorEditor({
               ['relativeCoordinate', 'Relative Position'],
               ['absoluteCoordinate', 'Absolute Coordinate'],
               ['window', 'Window'],
-            ].map(([k, n]) => (
-              <option key={k} value={k}>
-                {n}
-              </option>
-            ))}
-          </select>
+            ].map(([value, label]) => ({ value, label }))}
+          />
           <WindowChooser
             value={l.window}
             onChange={(window) => update(i, { ...l, window })}

@@ -98,7 +98,9 @@ try {
     .click();
   await page.getByRole('button', { name: '场景设置', exact: true }).click();
   await page.getByRole('button', { name: '添加触发器', exact: true }).click();
-  await page.getByLabel('触发方式', { exact: true }).selectOption('once');
+  await page.getByRole('combobox', { name: '触发方式', exact: true }).click();
+  await page.getByRole('combobox', { name: '触发方式', exact: true }).fill('once');
+  await page.locator('[role="option"][data-option-value="once"]').click();
   const input = page.getByLabel('指定时间', { exact: true });
   await check(
     'Invalid dates and format show inline errors and fail backend/save validation',

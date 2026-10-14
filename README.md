@@ -2,9 +2,11 @@
 
 一个 Local-First 的 Windows / macOS 桌面工作环境编排器。Tauri 2 + Rust + React + TypeScript + SQLite。
 
-当前版本 **0.4.25 · 复制文本步骤与托盘点击修复**：工作流新增「复制文本」，填写内容后运行即可写入系统剪贴板，后续用 `Ctrl+V` / `Command+V` 粘贴；支持中文、多行与空格。通过应用自己的恢复入口修复 ChatGPT / Codex 真正隐藏到托盘后无法点击的问题，用户已确认手动与自动点击均正常。保留微信恢复修复，现有场景无需重新录制。详见 [本版说明](docs/releases/v0.4.25.md)。
+当前版本 **0.4.26 · 下拉框排序与模糊搜索**：工作流编辑器的应用、窗口、子场景及其他下拉框按名称排序，中文按拼音、英文按字母、数字按自然顺序排列。直接输入名称片段、英文简写或应用进程名即可筛选，支持方向键与回车选择。详见 [本版说明](docs/releases/v0.4.26.md)。
 
-下载 [GitHub Releases v0.4.25](https://github.com/LiguoXia/LaunchFlow/releases/tag/v0.4.25)：Windows x64 安装包和便携包、macOS Intel 与 Apple Silicon 的 DMG 和应用 ZIP。
+下载 [GitHub Releases v0.4.26](https://github.com/LiguoXia/LaunchFlow/releases/tag/v0.4.26)：Windows x64 安装包和便携包、macOS Intel 与 Apple Silicon 的 DMG 和应用 ZIP。
+
+包含 **0.4.25 · 复制文本步骤与托盘点击修复**：工作流「复制文本」步骤将配置内容写入剪贴板，后续用快捷键粘贴；修复微信及 ChatGPT / Codex 从托盘恢复后无法点击。详见 [历史版本说明](docs/releases/v0.4.25.md)。
 
 包含 **0.4.23 · Windows 与 macOS 双架构发布**：包含 Chromium 录制跨重启定位修复、指定时间一次性触发器和 Windows 托盘隐藏主窗口恢复。详见 [历史版本说明](docs/releases/v0.4.23.md)。
 

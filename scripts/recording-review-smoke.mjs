@@ -62,11 +62,13 @@ const window = { pid: harness.pid, title: 'LaunchFlow Automation Test Harness' }
 async function record(text = 'review fixture') {
   await page.getByRole('button', { name: 'Start Recording', exact: true }).click();
   const dialog = page.getByRole('dialog');
-  await dialog.getByLabel('当前桌面窗口').selectOption({
-    label: (await invoke('automation_windows'))
-      .filter((w) => w.pid === harness.pid)
-      .map((w) => `${w.application} · ${w.title}`)[0],
-  });
+  const recordedWindowLabel = (await invoke('automation_windows'))
+    .filter((w) => w.pid === harness.pid)
+    .map((w) => `${w.application} · ${w.title}`)[0];
+  await dialog
+    .getByRole('combobox', { name: '当前桌面窗口', exact: true })
+    .fill(recordedWindowLabel);
+  await page.getByRole('option', { name: recordedWindowLabel, exact: true }).click();
   await dialog.getByRole('button', { name: 'Start Recording', exact: true }).click();
   await expect(page.getByText('Recording 录制中', { exact: true })).toBeVisible();
   if (text) {
