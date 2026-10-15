@@ -16,19 +16,15 @@ const socket = createServer();
 await new Promise((r) => socket.listen(0, '127.0.0.1', r));
 const port = socket.address().port;
 await new Promise((r) => socket.close(r));
-const app = spawn(
-  process.env.LAUNCHFLOW_TEST_APP || resolve(local.targetDir, 'debug/launchflow.exe'),
-  [],
-  {
-    windowsHide: true,
-    stdio: 'ignore',
-    env: {
-      ...process.env,
-      LAUNCHFLOW_TEST_DATA_DIR: dataDir,
-      WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-address=127.0.0.1 --remote-debugging-port=${port}`,
-    },
+const app = spawn(resolve(local.targetDir, 'debug/launchflow.exe'), [], {
+  windowsHide: true,
+  stdio: 'ignore',
+  env: {
+    ...process.env,
+    LAUNCHFLOW_TEST_DATA_DIR: dataDir,
+    WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-address=127.0.0.1 --remote-debugging-port=${port}`,
   },
-);
+});
 const fixture = spawn(resolve('native/bin/launchflow-harness.exe'), [], {
   windowsHide: true,
   stdio: 'ignore',
@@ -233,7 +229,7 @@ try {
   }
   throw e;
 } finally {
-  await invoke('automation_session_control', { operation: 'stop' }).catch(() => {});
+  if (page) await invoke('automation_session_control', { operation: 'stop' }).catch(() => {});
   await sleep(250);
   await browser?.close();
   app.kill();
