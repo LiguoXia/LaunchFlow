@@ -2264,7 +2264,7 @@ dependencies = [
 
 [[package]]
 name = "launchflow"
-version = "0.4.26"
+version = "0.4.27"
 dependencies = [
  "launchflow-core",
  "serde",
@@ -2283,7 +2283,7 @@ dependencies = [
 
 [[package]]
 name = "launchflow-core"
-version = "0.4.26"
+version = "0.4.27"
 dependencies = [
  "async-trait",
  "base64 0.22.1",

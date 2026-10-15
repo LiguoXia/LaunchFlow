@@ -29,6 +29,7 @@ await writeFile(
   `LaunchFlow ${version} — Windows x64 本地构建\n\n解压整个文件夹，保留 native 子目录，然后运行 LaunchFlow.exe。\n需要 Windows 10/11、WebView2 与系统 .NET Framework。数据保存在当前用户应用数据目录；此 ZIP 不是数据隔离模式。\n\n开机自动登录：设置中点击“在 LaunchFlow 中配置自动登录”，填写账户密码（不是 PIN），保存后确认默认场景检查通过。支持更新密码和关闭；详见 IN-APP-AUTOLOGON.md。\n解锁前准备：设置中选择“解锁前准备桌面应用”，配合 Windows 登录选项中的自动完成设置，设置默认场景；依赖 Windows ARSO 条件，详见 DESKTOP-STARTUP.md。\n录制修复：审阅关闭、放弃或插入后不会反复弹出；详见 RECORDING-REVIEW-FIX.md。\n管理员关闭：工作区的一键关闭会为被拒绝的管理员应用请求 Windows 授权；正常关闭优先，强制退出仍需另行确认，详见 WORKSPACE-CLOSE.md。\n\n预授权启动：应用库勾选“使用预授权启动”，点击“保存并授权免确认启动”，首次在 Windows 确认一次。后续固定应用与参数通过已授权任务启动，程序更新后须重新授权。可刷新状态或撤销授权。详见 PREAUTHORIZED-LAUNCH.md，其中记录当前版本的实机验收状态。\n管理员启动：需要权限的 .exe 自动请求 Windows UAC；也可在应用库勾选“以管理员身份启动”。请在系统授权框亲自确认，拒绝授权后不自动重试。详见 UAC-LAUNCH-FIX.md。\n工作区：捕获窗口，选择启动顺序、Relative / Exact 与 Office / Home / Laptop。\n迁移：导出 YAML 或完整 .launchflow 包，导入时完成应用、路径、Secret 映射与预览确认。\n凭据：权限与凭据页管理 vault:ID；不会随场景导出。\n旧场景升级默认阻止启动时敏感动作，请在编辑器重新检查策略。\n\n本地构建未签名；Updater 未配置而禁用。不是 V1 Release Candidate。\nMac 与多屏实机、签名升级、安装/卸载及真实 Docker 完整链路仍有验收缺口。\n历史 Phase 4 验收边界见 V1-RELEASE-READINESS.md，发行流程见 RELEASE.md。\n`,
 );
 for (const name of [
+  'LaunchFlow-详细使用手册.md',
   'V1-RELEASE-READINESS.md',
   'RELEASE.md',
   'UAC-LAUNCH-FIX.md',

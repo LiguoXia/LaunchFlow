@@ -135,16 +135,20 @@ impl SessionManager {
         };
         *self.state.lock().unwrap() = Some(state.clone());
         let manager = self.clone();
-        let initial = json!({"op":mode,"window":window}).to_string() + "\n";
+        // Picker controls belong to the desktop host, not the native worker.
+        // Exclude them from hit testing so Close/Stop remain normal mouse clicks.
+        let initial =
+            json!({"op":mode,"window":window,"excludedPid":std::process::id()}).to_string() + "\n";
         tokio::spawn(async move {
             #[cfg(windows)]
             let _scope = scope;
             let mut stop_at: Option<tokio::time::Instant> = None;
+            let mut terminal_status = None;
             let mut started = false;
             let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
             if tx.write_all(initial.as_bytes()).await.is_err() {
+                terminal_status = Some("failed");
                 manager.publish(|s| {
-                    s.status = "failed".into();
                     s.error = Some(AutomationError::new(
                         "workerUnavailable",
                         "Input session did not start",
@@ -166,8 +170,8 @@ impl SessionManager {
                             if line.len() >= 2 * 1024 * 1024 { break; }
                             let Ok(event) = serde_json::from_str::<Value>(&line) else { break };
                             if event["ok"] == false {
+                                terminal_status = Some("failed");
                                 manager.publish(|s| {
-                                    s.status = "failed".into();
                                     s.error = serde_json::from_value(event["error"].clone()).ok();
                                 });
                                 break;
@@ -178,11 +182,14 @@ impl SessionManager {
                                     manager.publish(|s| s.status = event["state"].as_str().unwrap_or("recording").into());
                                 }
                                 "hover" => manager.publish(|s| s.element = event["element"].clone()),
-                                "selected" => manager.publish(|s| {
-                                    s.element = event["element"].clone();
-                                    s.locator = event["locator"].clone();
-                                    s.status = "selected".into();
-                                }),
+                                "selected" => {
+                                    terminal_status = Some("selected");
+                                    manager.publish(|s| {
+                                        s.element = event["element"].clone();
+                                        s.locator = event["locator"].clone();
+                                    });
+                                    stop_at = Some(tokio::time::Instant::now() + Duration::from_secs(2));
+                                }
                                 "actions" => {
                                     manager.publish(|s| s.actions = event["actions"].as_array().cloned().unwrap_or_default().into_iter().take(256).collect());
                                     if event["actions"].as_array().is_some_and(|a| a.len() >= 256) {
@@ -195,12 +202,12 @@ impl SessionManager {
                                         if s.warnings.len() < 8 && !s.warnings.iter().any(|m|m == message) { s.warnings.push(message.into()); }
                                     }
                                 }),
-                                "cancelled" => manager.publish(|s| s.status = "cancelled".into()),
+                                "cancelled" => {
+                                    terminal_status = Some("cancelled");
+                                    stop_at = Some(tokio::time::Instant::now() + Duration::from_secs(2));
+                                }
                                 "stopped" => {
                                     manager.publish(|s| {
-                                        if s.status != "selected" && s.status != "cancelled" {
-                                            s.status = "stopped".into();
-                                        }
                                         if let Some(actions) = event["actions"].as_array() {
                                             s.actions = actions.iter().take(256).cloned().collect();
                                         }
@@ -213,8 +220,8 @@ impl SessionManager {
                         _ = tokio::time::sleep(Duration::from_millis(150)) => {
                             if stop_at.is_some_and(|d| tokio::time::Instant::now() >= d) { break; }
                             if !started && tokio::time::Instant::now() >= deadline {
+                                terminal_status = Some("failed");
                                 manager.publish(|s| {
-                                    s.status = "failed".into();
                                     s.error = Some(AutomationError::new("permissionDenied", "Native input session did not become ready; inspect system permissions"));
                                 });
                                 break;
@@ -225,12 +232,13 @@ impl SessionManager {
             }
             let _ = child.kill().await;
             let _ = child.wait().await;
+            // The UI may start the next pick as soon as it observes a terminal
+            // event. Release the old hooks and admission slot before that event.
+            let mut active = manager.control.lock().unwrap();
+            *active = None;
             manager.publish(|s| {
-                if ["starting", "recording", "paused", "picking"].contains(&s.status.as_str()) {
-                    s.status = "stopped".into();
-                }
+                s.status = terminal_status.unwrap_or("stopped").into();
             });
-            *manager.control.lock().unwrap() = None;
         });
         Ok(state)
     }

@@ -899,13 +899,25 @@ function ConfigField({
         </span>
       </label>
     );
+  // A locator editor contains multiple inputs, buttons and the picker dialog.
+  // A wrapping label can activate its first button (Delete Locator) when a
+  // clicked dialog control unmounts. Group it without implicit label activation.
+  if (field.kind === 'locators')
+    return (
+      <div className="locator-field" role="group" aria-label={field.label}>
+        <span>
+          {field.label}
+          {field.required && <span className="required"> *</span>}
+        </span>
+        <LocatorEditor value={value} onChange={onChange} allowHiddenWindows={allowHiddenWindows} />
+        <small>{field.hint}</small>
+      </div>
+    );
   return (
     <label>
       {field.label}
       {field.required && <span className="required"> *</span>}
-      {field.kind === 'locators' ? (
-        <LocatorEditor value={value} onChange={onChange} allowHiddenWindows={allowHiddenWindows} />
-      ) : field.kind === 'json' ? (
+      {field.kind === 'json' ? (
         <JsonInput value={value} label={field.label} onChange={onChange} />
       ) : field.kind === 'scene' ? (
         <SearchSelect

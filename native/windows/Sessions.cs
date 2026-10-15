@@ -57,6 +57,10 @@ namespace LaunchFlow.Native
             foreach (var f in borders)
                 f.Dispose();
         }
+        public void Hide()
+        {
+            foreach (var f in borders) f.Hide();
+        }
     }
     public sealed class RecordingBar : Form
     {
@@ -159,6 +163,14 @@ static void Session(Dictionary<string, object> request)
 {
     bool picking = Wire.Str(request, "op") == "pick";
     var scope = Wire.Map(Wire.Get(request, "window"));
+    uint excludedPid = (uint)Wire.Num(request, "excludedPid");
+    uint workerPid = (uint)System.Diagnostics.Process.GetCurrentProcess().Id;
+    Func<IntPtr, bool> canPickWindow = delegate(IntPtr window) {
+        if (window == IntPtr.Zero) return false;
+        uint pid;
+        Win.GetWindowThreadProcessId(window, out pid);
+        return pid != workerPid && (excludedPid == 0 || pid != excludedPid);
+    };
     IntPtr target = picking ? IntPtr.Zero : Desktop.FindWindow(scope);
     var context = new ApplicationContext();
     using (var host = new Form()) using (var overlay = new Overlay()) using (var banner = new RecordingBar())
@@ -166,6 +178,7 @@ static void Session(Dictionary<string, object> request)
         var handle = host.Handle;
         bool paused = false, stopped = false, selected = false;
         Dictionary<string, object> hovered = null;
+        IntPtr hoveredWindow = IntPtr.Zero;
         var actions = new List<Dictionary<string, object>>();
         var gate = new object();
         DateTime last = DateTime.MinValue;
@@ -173,6 +186,14 @@ static void Session(Dictionary<string, object> request)
         Dictionary<string, object> pendingClick = null;
         Win.POINT downPoint = new Win.POINT();
         string hoverIdentity = "";
+        Action clearHover = delegate {
+            if (hovered == null) return;
+            hovered = null;
+            hoveredWindow = IntPtr.Zero;
+            hoverIdentity = "";
+            overlay.Hide();
+            Wire.Write(Wire.Obj("event", "hover", "element", null));
+        };
         RecordedText text = null;
         Action<string, Dictionary<string, object>, Dictionary<string, object>> append =
             delegate(string kind, Dictionary<string, object> element, Dictionary<string, object> values)
@@ -288,7 +309,13 @@ static void Session(Dictionary<string, object> request)
             var inputPoint = ((Win.MouseHook)Marshal.PtrToStructure(data, typeof(Win.MouseHook))).Point;
             if (picking && (msg == 0x201 || msg == 0x202))
             {
-                if (msg == 0x201 && hovered != null)
+                var pointWindow = Win.GetAncestor(Win.WindowFromPoint(inputPoint), 2);
+                var bounds = hovered == null ? Wire.Obj() : Wire.Map(hovered["bounds"]);
+                bool hit = hovered != null && canPickWindow(pointWindow) && pointWindow == hoveredWindow &&
+                    inputPoint.X >= Wire.Num(bounds, "x") && inputPoint.Y >= Wire.Num(bounds, "y") &&
+                    inputPoint.X < Wire.Num(bounds, "x") + Wire.Num(bounds, "width") &&
+                    inputPoint.Y < Wire.Num(bounds, "y") + Wire.Num(bounds, "height");
+                if (msg == 0x201 && hit)
                 {
                     try
                     {
@@ -302,7 +329,10 @@ static void Session(Dictionary<string, object> request)
                 }
                 if (msg == 0x202 && selected)
                     host.BeginInvoke(stop);
-                return new IntPtr(1);
+                // Only swallow the pair used to select a real target. In
+                // particular, the host's Close button must reach its WebView.
+                if (selected) return new IntPtr(1);
+                return Win.CallNextHookEx(IntPtr.Zero, code, message, data);
             }
             if (!picking && msg == 0x201)
             {
@@ -433,19 +463,29 @@ static void Session(Dictionary<string, object> request)
         {
             timer.Tick += delegate
             {
+                if (selected || stopped) return;
                 try
                 {
                     Win.POINT p;
                     Win.GetCursorPos(out p);
+                    if (!canPickWindow(Win.GetAncestor(Win.WindowFromPoint(p), 2))) {
+                        clearHover();
+                        return;
+                    }
                     var e = SemanticElement(AutomationElement.FromPoint(new System.Windows.Point(p.X, p.Y)));
                     var w = Desktop.ElementWindow(e);
-                    if (w == IntPtr.Zero)
+                    if (!canPickWindow(w)) {
+                        clearHover();
                         return;
+                    }
                     var info = Desktop.Info(e, w);
-                    if (scope.Count > 0 && !Desktop.WindowMatches(w, scope))
+                    if (scope.Count > 0 && !Desktop.WindowMatches(w, scope)) {
+                        clearHover();
                         return;
+                    }
                     string identity = String.Join(",", e.GetRuntimeId());
                     hovered = info;
+                    hoveredWindow = w;
                     overlay.Draw(Wire.Map(info["bounds"]));
                     if (identity != hoverIdentity)
                     {
@@ -455,6 +495,7 @@ static void Session(Dictionary<string, object> request)
                 }
                 catch
                 {
+                    clearHover();
                 }
             };
             timer.Start();

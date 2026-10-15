@@ -1,6 +1,6 @@
 {
   "name": "launchflow",
-  "version": "0.4.26",
+  "version": "0.4.27",
   "private": true,
   "type": "module",
   "scripts": {
@@ -19,6 +19,7 @@
     "test:gui": "node scripts/phase3-smoke.mjs",
     "test:native": "node scripts/test-native.mjs --run",
     "test:recorder": "node scripts/test-recorder.mjs",
+    "test:picker": "node scripts/picker-smoke.mjs",
     "test:product": "node scripts/phase4-smoke.mjs",
     "test:workspace-close": "node scripts/workspace-close-smoke.mjs",
     "test:default-scene": "node scripts/default-scene-smoke.mjs",

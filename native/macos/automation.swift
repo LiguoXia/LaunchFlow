@@ -234,12 +234,29 @@ final class Overlay {
     let panel:NSPanel
     init() {panel=NSPanel(contentRect:.zero,styleMask:[.borderless,.nonactivatingPanel],backing:.buffered,defer:false);panel.isOpaque=false;panel.backgroundColor = .clear;panel.level = .floating;panel.ignoresMouseEvents=true;panel.hasShadow=false;panel.contentView?.wantsLayer=true;panel.contentView?.layer?.borderColor=NSColor.systemGreen.cgColor;panel.contentView?.layer?.borderWidth=3}
     func draw(_ r:CGRect) {let top=CGDisplayBounds(CGMainDisplayID()).height;panel.setFrame(CGRect(x:r.minX-3,y:top-r.maxY-3,width:r.width+6,height:r.height+6),display:true);panel.orderFrontRegardless()}
+    func hide() {panel.orderOut(nil)}
     deinit {panel.close()}
 }
 func generatedLocator(_ value:Object)->Object {let w=obj(value["window"]);var result:Object=["kind":"accessibility","window":["application":str(w,"application"),"title":str(w,"title")],"ancestorPath":value["ancestorPath"] ?? []];for key in ["role","name","automationId","className","frameworkId"] {result[key]=value[key]};return result}
 final class Session: NSObject {
-    let picking:Bool;let scope:Object;let overlay=Overlay();var stopped=false;var paused=false;var selected=false;var hovered:Object?;var actions:[Object]=[];var last=Date.distantPast;var timer:Timer?;var tap:CFMachPort?;var banner:NSPanel?;var pauseButton:NSButton?
-    init(_ request:Object) {picking=str(request,"op") == "pick";scope=obj(request["window"]);super.init()}
+    let picking:Bool;let scope:Object;let excludedPid:pid_t;let overlay=Overlay();var stopped=false;var paused=false;var selected=false;var hovered:Object?;var actions:[Object]=[];var last=Date.distantPast;var timer:Timer?;var tap:CFMachPort?;var banner:NSPanel?;var pauseButton:NSButton?
+    init(_ request:Object) {picking=str(request,"op") == "pick";scope=obj(request["window"]);excludedPid=pid_t(num(request,"excludedPid"));super.init()}
+    func clearHover() {
+        if hovered == nil {return};hovered=nil;overlay.hide();emit(["event":"hover","element":NSNull()])
+    }
+    // Window-server hit testing does not query AX from the input event tap.
+    // Ignore our transparent overlay and leave host controls as normal clicks.
+    func pointerOwner(_ p:CGPoint)->pid_t? {
+        guard let list=CGWindowListCopyWindowInfo([.optionOnScreenOnly,.excludeDesktopElements],kCGNullWindowID) as? [Object] else{return nil}
+        for item in list {
+            let pid=pid_t(num(item,kCGWindowOwnerPID as String))
+            if pid == ProcessInfo.processInfo.processIdentifier {continue}
+            guard let frame=item[kCGWindowBounds as String] as? [String:Any],
+                  let r=CGRect(dictionaryRepresentation:frame as CFDictionary),r.contains(p) else{continue}
+            return pid
+        }
+        return nil
+    }
     func append(_ kind:String,_ element:Object,_ values:Object=[:]) {
         if paused || stopped || actions.count>=256{return};let locator=generatedLocator(element);var action:Object=["kind":kind,"locators":[locator]];for(k,v)in values{action[k]=v}
         let same=actions.last.map {NSDictionary(dictionary:obj(($0["locators"] as? [Object])?.first)).isEqual(to:locator)} ?? false
@@ -250,6 +267,7 @@ final class Session: NSObject {
         var result:AXUIElement?;guard AXUIElementCopyElementAtPosition(AXUIElementCreateSystemWide(),Float(p.x),Float(p.y),&result) == .success, var e=result else{return nil}
         if text(e,kAXRoleAttribute) == "AXStaticText",let p=parent(e),["AXButton","AXCheckBox"].contains(text(p,kAXRoleAttribute)){e=p}
         var pid:pid_t=0;AXUIElementGetPid(e,&pid)
+        if picking && (pid == excludedPid || pid == ProcessInfo.processInfo.processIdentifier) {return nil}
         guard let w=(try? windows())?.first(where:{$0.app.processIdentifier == pid && bounds($0.element).contains(p) && (scope.isEmpty || windowMatches($0,scope))}) else{return nil}
         let path=elements(w.element).first(where:{CFEqual($0.0,e)})?.1 ?? [];return info(e,w,path)
     }
@@ -261,8 +279,14 @@ final class Session: NSObject {
     func event(_ type:CGEventType,_ event:CGEvent)->Unmanaged<CGEvent>? {
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {if let tap=tap{CGEvent.tapEnable(tap:tap,enable:true)};return Unmanaged.passUnretained(event)}
         if picking {
+            if stopped {return Unmanaged.passUnretained(event)}
             if type == .keyDown && event.getIntegerValueField(.keyboardEventKeycode) == 53 {emit(["event":"cancelled"]);stop();return nil}
-            if type == .leftMouseDown {if let value=hovered{selected=true;emit(["event":"selected","element":value,"locator":generatedLocator(value)])};return nil}
+            if type == .leftMouseDown,let value=hovered,
+               rect(obj(value["bounds"])).contains(event.location),
+               let pid=pointerOwner(event.location),pid != excludedPid,
+               Double(pid) == num(obj(value["window"]),"pid") {
+                selected=true;emit(["event":"selected","element":value,"locator":generatedLocator(value)]);return nil
+            }
             if type == .leftMouseUp && selected {stop();return nil}
         } else if !paused && !stopped {
             // Defer AX queries so the system event tap stays responsive.
@@ -287,7 +311,12 @@ final class Session: NSObject {
         CFRunLoopAddSource(CFRunLoopGetMain(),source,.commonModes);CGEvent.tapEnable(tap:tap,enable:true)
         defer{timer?.invalidate();CGEvent.tapEnable(tap:tap,enable:false);CFRunLoopRemoveSource(CFRunLoopGetMain(),source,.commonModes);CFMachPortInvalidate(tap);banner?.close();emit(["event":"stopped","actions":actions])}
         DispatchQueue.global().async {while let line=readLine(){guard let data=line.data(using:.utf8),let request=(try? JSONSerialization.jsonObject(with:data)) as? Object else{continue};DispatchQueue.main.async{switch str(request,"op"){case "stop":self.stop();case "pause":if !self.paused{self.togglePause()};case "resume":if self.paused{self.togglePause()};default:break}}};DispatchQueue.main.async{self.stop()}}
-        if picking {timer=Timer.scheduledTimer(withTimeInterval:0.15,repeats:true){_ in if let p=CGEvent(source:nil)?.location,let value=self.point(p){self.hovered=value;self.overlay.draw(rect(obj(value["bounds"])));emit(["event":"hover","element":value])}}}
+        if picking {timer=Timer.scheduledTimer(withTimeInterval:0.15,repeats:true){_ in
+            if self.selected || self.stopped {return}
+            guard let p=CGEvent(source:nil)?.location,self.pointerOwner(p) != self.excludedPid,
+                  let value=self.point(p) else{self.clearHover();return}
+            self.hovered=value;self.overlay.draw(rect(obj(value["bounds"])));emit(["event":"hover","element":value])
+        }}
         else {let panel=NSPanel(contentRect:CGRect(x:30,y:CGDisplayBounds(CGMainDisplayID()).height-90,width:400,height:50),styleMask:[.borderless,.nonactivatingPanel],backing:.buffered,defer:false);panel.level = .floating;panel.backgroundColor = .windowBackgroundColor;let label=NSTextField(labelWithString:"● Recording · LaunchFlow");label.frame=CGRect(x:12,y:16,width:180,height:20);panel.contentView?.addSubview(label);let pause=NSButton(title:"Pause Recording",target:self,action:#selector(Session.togglePause));pause.frame=CGRect(x:190,y:10,width:130,height:30);let stop=NSButton(title:"Stop",target:self,action:#selector(Session.stop));stop.frame=CGRect(x:325,y:10,width:65,height:30);panel.contentView?.addSubview(pause);panel.contentView?.addSubview(stop);panel.orderFrontRegardless();banner=panel;pauseButton=pause}
         emit(["event":"state","state":picking ? "picking":"recording"]);emit(["event":"actions","actions":actions])
         while !stopped {RunLoop.current.run(until:Date().addingTimeInterval(0.05))}

@@ -2,9 +2,13 @@
 
 一个 Local-First 的 Windows / macOS 桌面工作环境编排器。Tauri 2 + Rust + React + TypeScript + SQLite。
 
-当前版本 **0.4.26 · 下拉框排序与模糊搜索**：工作流编辑器的应用、窗口、子场景及其他下拉框按名称排序，中文按拼音、英文按字母、数字按自然顺序排列。直接输入名称片段、英文简写或应用进程名即可筛选，支持方向键与回车选择。详见 [本版说明](docs/releases/v0.4.26.md)。
+当前版本 **0.4.27 · 连续拾取与关闭修复**：Pick Element 支持连续拾取和重新选择其他窗口；修复鼠标无法关闭弹窗、取消时误删定位器及旧悬停状态残留。全部 GUI 步骤与 Fallback 共用修复。详见 [本版说明](docs/releases/v0.4.27.md)。
 
-下载 [GitHub Releases v0.4.26](https://github.com/LiguoXia/LaunchFlow/releases/tag/v0.4.26)：Windows x64 安装包和便携包、macOS Intel 与 Apple Silicon 的 DMG 和应用 ZIP。
+下载 [GitHub Releases v0.4.27](https://github.com/LiguoXia/LaunchFlow/releases/tag/v0.4.27)：Windows x64 安装包和便携包、macOS Intel 与 Apple Silicon 的 DMG 和应用 ZIP。
+
+完整操作指南：[LaunchFlow 详细使用手册（中文）](docs/LaunchFlow-详细使用手册.md)，涵盖全部 33 种步骤、12 种触发器、每项配置、Highlight、七种定位器与 Fallback、录制、工作区、凭据及常见问题。
+
+包含 **0.4.26 · 下拉框排序与模糊搜索**：应用、窗口、子场景及其他选择框按名称排序，支持输入片段 / 英文简写筛选与键盘选择。详见 [历史版本说明](docs/releases/v0.4.26.md)。
 
 包含 **0.4.25 · 复制文本步骤与托盘点击修复**：工作流「复制文本」步骤将配置内容写入剪贴板，后续用快捷键粘贴；修复微信及 ChatGPT / Codex 从托盘恢复后无法点击。详见 [历史版本说明](docs/releases/v0.4.25.md)。
 

@@ -162,10 +162,21 @@ export function LocatorEditor({
   const locators = Array.isArray(value) ? (value as Locator[]) : [];
   const [error, setError] = useState('');
   const [picking, setPicking] = useState<{ id: string; index: number } | null>(null);
+  const [starting, setStarting] = useState(false);
+  const startingRef = useRef(false);
   const session = useAutomationSession();
   const picked = useRef('');
   const update = (i: number, l: Locator) => onChange(locators.map((v, j) => (i === j ? l : v)));
   useEffect(() => {
+    if (
+      picking &&
+      session?.id === picking.id &&
+      ['cancelled', 'stopped', 'failed'].includes(session.status)
+    ) {
+      if (session.error) setError(errorText(session.error));
+      setPicking(null);
+      return;
+    }
     if (
       picking &&
       session?.id === picking.id &&
@@ -179,12 +190,20 @@ export function LocatorEditor({
     }
   }, [session, picking]);
   const pick = async (index: number) => {
+    if (startingRef.current || active(session)) return;
+    startingRef.current = true;
+    setStarting(true);
     try {
       setError('');
-      const s = await automation.start('pick', locators[index]?.window ?? {});
+      // Re-picking replaces the target, including its window. A previous title,
+      // dialog or app must not silently restrict subsequent picks.
+      const s = await automation.start('pick', {});
       setPicking({ id: s.id, index });
     } catch (e) {
       setError(errorText(e));
+    } finally {
+      startingRef.current = false;
+      setStarting(false);
     }
   };
   const asset = async (i: number, l: Locator) => {
@@ -368,7 +387,7 @@ export function LocatorEditor({
           )}
           <button
             className="button secondary"
-            disabled={active(session)}
+            disabled={starting || active(session)}
             onClick={() => void pick(i)}
           >
             <Crosshair size={15} />
@@ -404,14 +423,21 @@ export function LocatorEditor({
         <Modal
           title="Element Picker · 单击选择 / Esc 取消"
           onClose={() => {
-            void automation.control('stop').catch(() => {});
-            setPicking(null);
+            void automation
+              .control('stop')
+              .then(() => setPicking(null))
+              .catch((e) => setError(errorText(e)));
           }}
         >
           <div className="modal-body">
+            <p>
+              将鼠标移到目标应用的控件上，单击选取。可重新选择其他窗口；点击右上角关闭或按 Esc
+              取消。
+            </p>
             <p>{session.status}</p>
             <ElementInfo element={session.element} />
             {session.error && <p role="alert">{session.error.message}</p>}
+            {error && <p role="alert">{error}</p>}
           </div>
         </Modal>
       )}

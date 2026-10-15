@@ -98,6 +98,7 @@ if (platform.host === 'win32') {
     `LaunchFlow ${version} / Windows x64\n解压整个文件夹，保留 native 子目录，运行 LaunchFlow.exe。\n需要 Windows 10/11 和 WebView2。数据保存在当前用户应用数据目录。\n本预发布版未使用发行证书签名，自动更新未配置，请手动升级。\n`,
   );
   const archive = `LaunchFlow_${version}_windows-x64-portable.zip`;
+  await copyFile('docs/LaunchFlow-详细使用手册.md', join(directory, 'LaunchFlow-详细使用手册.md'));
   const quote = (value) => "'" + value.replaceAll("'", "''") + "'";
   execFileSync(
     'powershell.exe',
