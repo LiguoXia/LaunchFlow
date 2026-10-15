@@ -12,12 +12,12 @@ const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 async function until(test) {
   const deadline = Date.now() + 12000;
   while (Date.now() < deadline) {
-    if (test()) return;
+    if (await test()) return;
     await pause(50);
   }
   throw new Error('Session event deadline');
 }
-function session(op) {
+function session(op, scope = window) {
   const child = spawn(worker, [], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
   let buffer = '';
   const events = [];
@@ -34,7 +34,7 @@ function session(op) {
       }
     }
   });
-  child.stdin.write(JSON.stringify({ op, window }) + '\n');
+  child.stdin.write(JSON.stringify({ op, window: scope }) + '\n');
   return { child, events, send: (op) => child.stdin.write(JSON.stringify({ op }) + '\n') };
 }
 const perform = (id, kind, args = {}) =>
@@ -46,7 +46,15 @@ const perform = (id, kind, args = {}) =>
   });
 let recorder, picker;
 try {
-  await pause(1200);
+  await until(async () => {
+    try {
+      return (await callNative({ op: 'windows' })).some(
+        (w) => w.pid === app.pid && w.title === window.title,
+      );
+    } catch {
+      return false;
+    }
+  });
   recorder = session('record');
   await until(() => recorder.events.some((e) => e.state === 'recording'));
   await perform('start-button', 'click');
@@ -112,6 +120,24 @@ try {
     beforePick.name,
     'Picker must consume the real selection click',
   );
+  picker = session('pick', { ...window, title: 'No matching picker window' });
+  await until(() => picker.events.some((e) => e.state === 'picking'));
+  const beforeUnmatchedPick = (await resultInfo()).name;
+  await callNative({
+    op: 'perform',
+    window,
+    point: { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 },
+    action: { kind: 'click' },
+  });
+  await pause(200);
+  assert.equal(
+    (await resultInfo()).name,
+    beforeUnmatchedPick,
+    'An unmatched pick must not click through to the target app',
+  );
+  assert(!picker.events.some((e) => e.event === 'selected'));
+  picker.send('stop');
+  await until(() => picker.events.some((e) => e.event === 'stopped'));
   picker = session('pick');
   await until(() => picker.events.some((e) => e.state === 'picking'));
   await perform(null, 'pressKey', { key: 'Escape' });

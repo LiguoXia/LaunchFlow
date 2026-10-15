@@ -239,7 +239,7 @@ final class Overlay {
 }
 func generatedLocator(_ value:Object)->Object {let w=obj(value["window"]);var result:Object=["kind":"accessibility","window":["application":str(w,"application"),"title":str(w,"title")],"ancestorPath":value["ancestorPath"] ?? []];for key in ["role","name","automationId","className","frameworkId"] {result[key]=value[key]};return result}
 final class Session: NSObject {
-    let picking:Bool;let scope:Object;let excludedPid:pid_t;let overlay=Overlay();var stopped=false;var paused=false;var selected=false;var hovered:Object?;var actions:[Object]=[];var last=Date.distantPast;var timer:Timer?;var tap:CFMachPort?;var banner:NSPanel?;var pauseButton:NSButton?
+    let picking:Bool;let scope:Object;let excludedPid:pid_t;let overlay=Overlay();var stopped=false;var paused=false;var selected=false;var pickPressed=false;var hovered:Object?;var actions:[Object]=[];var last=Date.distantPast;var timer:Timer?;var tap:CFMachPort?;var banner:NSPanel?;var pauseButton:NSButton?
     init(_ request:Object) {picking=str(request,"op") == "pick";scope=obj(request["window"]);excludedPid=pid_t(num(request,"excludedPid"));super.init()}
     func clearHover() {
         if hovered == nil {return};hovered=nil;overlay.hide();emit(["event":"hover","element":NSNull()])
@@ -281,13 +281,18 @@ final class Session: NSObject {
         if picking {
             if stopped {return Unmanaged.passUnretained(event)}
             if type == .keyDown && event.getIntegerValueField(.keyboardEventKeycode) == 53 {emit(["event":"cancelled"]);stop();return nil}
-            if type == .leftMouseDown,let value=hovered,
-               rect(obj(value["bounds"])).contains(event.location),
-               let pid=pointerOwner(event.location),pid != excludedPid,
-               Double(pid) == num(obj(value["window"]),"pid") {
-                selected=true;emit(["event":"selected","element":value,"locator":generatedLocator(value)]);return nil
+            if type == .leftMouseDown {
+                let pid=pointerOwner(event.location)
+                pickPressed = pid != excludedPid
+                if pickPressed {
+                    if let value=hovered,let pid=pid,rect(obj(value["bounds"])).contains(event.location),
+                       Double(pid) == num(obj(value["window"]),"pid") {
+                        selected=true;emit(["event":"selected","element":value,"locator":generatedLocator(value)])
+                    }
+                    return nil
+                }
             }
-            if type == .leftMouseUp && selected {stop();return nil}
+            if type == .leftMouseUp && pickPressed {pickPressed=false;if selected{stop()};return nil}
         } else if !paused && !stopped {
             // Defer AX queries so the system event tap stays responsive.
             if type == .leftMouseUp {let p=event.location;DispatchQueue.main.async {if let e=self.point(p){self.append("click",e)}}}

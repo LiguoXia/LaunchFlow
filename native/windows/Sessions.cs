@@ -176,7 +176,7 @@ static void Session(Dictionary<string, object> request)
     using (var host = new Form()) using (var overlay = new Overlay()) using (var banner = new RecordingBar())
     {
         var handle = host.Handle;
-        bool paused = false, stopped = false, selected = false;
+        bool paused = false, stopped = false, selected = false, pickPressed = false;
         Dictionary<string, object> hovered = null;
         IntPtr hoveredWindow = IntPtr.Zero;
         var actions = new List<Dictionary<string, object>>();
@@ -310,6 +310,7 @@ static void Session(Dictionary<string, object> request)
             if (picking && (msg == 0x201 || msg == 0x202))
             {
                 var pointWindow = Win.GetAncestor(Win.WindowFromPoint(inputPoint), 2);
+                if (msg == 0x201) pickPressed = canPickWindow(pointWindow);
                 var bounds = hovered == null ? Wire.Obj() : Wire.Map(hovered["bounds"]);
                 bool hit = hovered != null && canPickWindow(pointWindow) && pointWindow == hoveredWindow &&
                     inputPoint.X >= Wire.Num(bounds, "x") && inputPoint.Y >= Wire.Num(bounds, "y") &&
@@ -327,11 +328,15 @@ static void Session(Dictionary<string, object> request)
                     }
                     catch { selected = false; }
                 }
-                if (msg == 0x202 && selected)
-                    host.BeginInvoke(stop);
-                // Only swallow the pair used to select a real target. In
-                // particular, the host's Close button must reach its WebView.
-                if (selected) return new IntPtr(1);
+                // Host controls receive normal clicks. Elsewhere, even an
+                // unmatched pick must not accidentally operate the target app.
+                if (pickPressed) {
+                    if (msg == 0x202) {
+                        pickPressed = false;
+                        if (selected) host.BeginInvoke(stop);
+                    }
+                    return new IntPtr(1);
+                }
                 return Win.CallNextHookEx(IntPtr.Zero, code, message, data);
             }
             if (!picking && msg == 0x201)
